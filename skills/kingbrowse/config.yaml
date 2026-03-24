@@ -1,0 +1,71 @@
+# kingbrowse 资料检索配置
+# 支持多文件、多表配置；不指定 sheet 则搜索该文件下所有表
+
+browse_sources:
+  - file_id: "Pm7EhCQGRxMHzmSaTidmxxhP3MZtqpBbU"
+    file_name: "2026环京三角协同共享"
+    # 可选，不写 sheet 表示搜全部 7 张表
+    # 写了则只搜这几张
+    sheets:
+      - sheet_name: "主打方案库"
+        search_fields:
+          - "方案名称"
+          - "典型客户画像/用途"
+        name_field: "方案名称"
+        link_fields:
+          - "详细方案链接"
+          - "销售一指禅"
+          - "客户折页"
+      - sheet_name: "功能视听站"
+        search_fields:
+          - "产品小功能名称"
+          - "内容简介"
+        name_field: "产品小功能名称"
+        link_fields:
+          - "参考视频"
+      - sheet_name: "客户案例集"
+        search_fields:
+          - "客户名称"
+          - "客户亮点"
+        name_field: "客户名称"
+        link_fields:
+          - "案例链接"
+      - sheet_name: "场景资料包"
+        search_fields:
+          - "场景分类"
+          - "客户群体"
+          - "参考话术"
+        name_field: "场景分类"
+        link_fields:
+          - "资料链接"
+          - "参考场景"
+      - sheet_name: "产品官方资料"
+        search_fields:
+          - "产品名称"
+          - "产品描述"
+        name_field: "产品名称"
+        link_fields:
+          - "标准PPT"
+          - "产品白皮书"
+          - "资源配置单"
+      - sheet_name: "竞对情报局"
+        search_fields:
+          - "竞对名称"
+          - "应对核心策略"
+        name_field: "竞对名称"
+        link_fields:
+          - "应对资料链接"
+      - sheet_name: "AI演示中心"
+        search_fields:
+          - "功能点"
+          - "场景描述"
+        name_field: "功能点"
+        link_fields:
+          - "用例链接"
+          - "效果"
+          - "数据源"
+
+  # 预留：其他独立多维表（等做好后在此添加）
+  # - file_id: "xxxxxxxx"
+  #   file_name: "客户资料库"
+  #   sheets: []   # 空=搜全部表

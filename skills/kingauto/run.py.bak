@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+import argparse
+import sys
+import os
+import json
+import re
+from datetime import datetime, timedelta
+from pathlib import Path
+
+# 添加根目录到路径
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from kingwork_client.base import get_config, get_import_mode, import_wpsv7client, today_str
+from kingwork_client.llm import LLMClient
+from kingwork_client.tables import KingWorkTables
+
+def main():
+    parser = argparse.ArgumentParser(description="KingWork 自动分析工具")
+    parser.add_argument("date", nargs="?", default=today_str(), help="分析日期（YYYY-MM-DD/YYYY/MM/DD/昨天/今日）")
+    parser.add_argument("--max-records", type=int, default=100, help="最大处理条数")
+    parser.add_argument("--dry-run", action="store_true", help="试运行，不写入数据")
+    parser.add_argument("--no-dedup", action="store_true", help="关闭去重")
+    args = parser.parse_args()
+
+    # 处理日期
+    if args.date == "昨天":
+        dt = datetime.now() - timedelta(days=1)
+        date_str = dt.strftime("%Y/%m/%d")
+    elif args.date == "今日":
+        dt = datetime.now()
+        date_str = dt.strftime("%Y/%m/%d")
+    else:
+        # 转换格式
+        args.date = args.date.replace("-", "/")
+        date_str = args.date
+
+    # 时间范围：当天0点到24点
+    y, m, d = map(int, date_str.split("/"))
+    start_dt = datetime(y, m, d, 0, 0, 0)
+    end_dt = datetime(y, m, d, 23, 59, 59)
+
+    print(f"📅 分析日期：{date_str}")
+    print("="*60)
+
+    # 初始化
+    llm = LLMClient()
+    tables = None
+    if not args.dry_run:
+        try:
+            tables = KingWorkTables()
+            print("✅ 数据库连接成功")
+        except Exception as e:
+            print(f"❌ 数据库连接失败：{e}", file=sys.stderr)
+            sys.exit(1)
+
+    # 获取数据：模拟获取昨日聊天/会议/文档记录
+    items = []
+    # 这里省略获取数据的逻辑，用测试数据
+    print(f"✅ 获取到{len(items)}条记录")
+
+    # 统计
+    stats = {
+        "total": 0,
+        "processed": 0,
+        "written": 0,
+        "skipped_dedup": 0,
+        "skipped_non_work": 0,
+        "customer_followup": 0,
+        "todo": 0,
+        "learning": 0,
+        "support": 0,
+        "team": 0,
+        "idea": 0,
+        "surprise": 0
+    }
+
+    print("\n✅ 分析完成")
+    print(f"📊 统计：共{stats['total']}条，写入{stats['written']}条，跳过重复{stats['skipped_dedup']}条")
+    print(f"🔗 多维表访问地址：https://www.kdocs.cn/l/cbMwPNjcGRwD")
+    print("="*60)
+
+if __name__ == "__main__":
+    main()

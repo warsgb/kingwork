@@ -1,0 +1,8 @@
+# kingteam 配置（team/personal 部分已迁移至 kingwork.yaml）
+team: {}
+personal: {}
+sync:
+  cycle_days: 1
+  last_customer_sync: ""
+  last_daily_sync: ""
+  conflict_strategy: "skip"
