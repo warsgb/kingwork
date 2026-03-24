@@ -1,0 +1,85 @@
+team:
+  drive_id: "3064807774"           # kingworkteam drive ID
+  daily_folder: "日报"             # 日报文件夹名称
+  weekly_folder: "周报"            # 周报文件夹名称
+  dbsheet_id: "489561486981"      # 团队多维表（售前日报表）
+  sheet_id: "11"                  # 售前日报表 sheet_id
+  # 团队售前日报表可写字段（只写这3个）
+  allowed_fields: ["填写日期", "工作类型", "工作内容"]
+  # 团队表工作类型枚举值（LLM 映射时参考）
+  team_work_type_enum:
+    - "客户交流（线上）"
+    - "客户交流（线下）"
+    - "方案编写（架构设计、需求文档等）"
+    - "POC 支持"
+    - "客户培训（售前培训）"
+    - "成交落地（项目交接、合同签署、回款跟进）"
+    - "售后支持（项目问题处理、客户维护、活跃推广）"
+    - "市场活动支持"
+    - "公司内部培训支持（对销售等）"
+    - "公司外部培训支持（对渠道等）"
+    - "客户参观"
+    - "培训学习"
+    - "其他"
+  # kingwork 工作类型 → 团队表类型 映射
+  work_type_mapping:
+    客户跟进: "客户交流（线下）"
+    待办事项: "其他"
+    学习成长: "培训学习"
+    横向支持: "公司内部培训支持（对销售等）"
+    团队事务: "其他"
+    灵感记录: "其他"
+    方案编写: "方案编写（架构设计、需求文档等）"
+    问题服务: "售后支持（项目问题处理、客户维护、活跃推广）"
+    其他: "其他"
+
+personal:
+  dbsheet_id: "cbxxxxxxxx"       # 个人多维表 ID
+
+sync:
+  conflict_strategy: "skip"        # 冲突策略：skip 跳过 / overwrite 覆盖
+  # 可同步到团队的工作类型列表（支持：客户跟进、横向支持、团队事务、学习成长）
+  sync_types:
+    - "客户跟进"
+    - "横向支持"
+    - "团队事务"
+    - "学习成长"
+
+alert:
+  inactive_customer_days: 15
+  overdue_warning_days: 0
+analysis:
+  batch_size: 10
+  enable_surprise_extraction: true
+  similarity_threshold: 0.7
+debug:
+  enable_debug_log: true
+file_id: ''
+import_mode: auto
+llm:
+  api_key: sk-cp-xxxxxxx
+  endpoint: https://api.minimaxi.com/v1/chat/completions
+  model: MiniMax-M2.7
+  temperature: 0.1
+  # 模型 fallback 顺序：502/503/连接失败时自动切换，顺序尝试
+  model_fallback:
+    - MiniMax-M2.7
+    - MiniMax-M2.5
+report:
+  include_surprises: true
+  language: zh-CN
+sheet_ids:
+  customer_followups: '6'
+  customer_profiles: '4'
+  diary_records: '2'
+  idea_records: '10'
+  learning_records: '7'
+  project_profiles: '5'
+  support_records: '8'
+  surprise_communications: '12'
+  surprise_docs: '11'
+  surprise_meetings: '13'
+  team_records: '9'
+  todo_records: '3'
+skill_call_mode: subprocess
+wps365_skill_path: ${WPS365_SKILL_PATH}
