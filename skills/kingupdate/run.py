@@ -150,21 +150,46 @@ def _search_table(sheet_key: str, query: str, days: int) -> list[dict]:
 
     date_field = cfg.get("date_field", "")
 
-    # 注：WPS Date 字段不支持服务端 filter（GreaterThan/LessThan 返回 Unknown enum），
-    #     全量拉取 + 客户端日期过滤
+    # 服务端日期过滤：WPS 支持 Greater/Less 操作符（不是 GreaterThan/LessThan）
+    # 日期文本格式为 "2026/03/29"，边界处理同 _build_date_filter
+    from datetime import datetime, timezone, timedelta
+    tz = timezone(timedelta(hours=8))
+    now = datetime.now(tz=tz)
+    end_dt = now.replace(hour=23, minute=59, second=59)
+    start_dt = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0)
+    start_str = start_dt.strftime("%Y/%m/%d")
+    end_str = (end_dt + timedelta(days=1)).strftime("%Y/%m/%d")  # 延后一天确保包含当天
 
+    if start_str == end_str:
+        filter_body = {"mode": "AND", "criteria": [{"field": date_field, "operator": "equals", "values": [start_str]}]}
+    else:
+        filter_body = {"mode": "AND", "criteria": [
+            {"field": date_field, "operator": "greater", "values": [start_str]},
+            {"field": date_field, "operator": "less", "values": [end_str]},
+        ]}
+
+    raw_records = []
+    page_token = None
     try:
-        resp = dbsheet_list_records(
-            file_id=FILE_ID,
-            sheet_id=int(sheet_id),
-            page_size=100,
-        )
-        if resp.get("code") != 0:
-            return []
+        while True:
+            kwargs = {"page_size": 100}
+            if page_token:
+                kwargs["page_token"] = page_token
+            resp = dbsheet_list_records(
+                file_id=FILE_ID,
+                sheet_id=int(sheet_id),
+                filter_body=filter_body,
+                **kwargs
+            )
+            if resp.get("code") != 0:
+                break
+            page_records = (resp.get("data") or {}).get("records", [])
+            raw_records.extend(page_records)
+            page_token = (resp.get("data") or {}).get("page_token")
+            if not page_token or not page_records:
+                break
     except Exception:
-        return []
-
-    raw_records = (resp.get("data") or {}).get("records", [])
+        pass
     results = []
 
     for rec in raw_records:

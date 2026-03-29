@@ -83,26 +83,34 @@ def wps_headers() -> dict:
     return {"cookie": f"wps_sid={sid}; csrf={sid}", "Content-Type": "application/json"}
 
 def list_records(file_id: str, sheet_id: str, page_size: int = 100, filter_body: dict = None) -> list:
+    """遍历所有分页，返回全量记录（支持服务端 filter）。"""
     url = f"https://api.wps.cn/v7/dbsheet/{file_id}/sheets/{sheet_id}/records"
-    body = {"page_size": page_size}
-    if filter_body:
-        body["filter"] = filter_body
-    resp = requests.post(url, headers=wps_headers(), json=body, timeout=15)
-    data = resp.json()
-    if resp.status_code != 200 or data.get("code") != 0:
-        return []
-    records = data.get("data", {}).get("records", [])
     result = []
-    for r in records:
-        fields_str = r.get("fields", "{}")
-        if isinstance(fields_str, str):
-            try:
-                fields = json.loads(fields_str)
-            except Exception:
-                fields = {}
-        else:
-            fields = fields_str
-        result.append({"id": r.get("id"), **fields})
+    page_token = None
+    while True:
+        body = {"page_size": page_size}
+        if filter_body:
+            body["filter"] = filter_body
+        if page_token:
+            body["page_token"] = page_token
+        resp = requests.post(url, headers=wps_headers(), json=body, timeout=15)
+        data = resp.json()
+        if resp.status_code != 200 or data.get("code") != 0:
+            break
+        records = data.get("data", {}).get("records", [])
+        for r in records:
+            fields_str = r.get("fields", "{}")
+            if isinstance(fields_str, str):
+                try:
+                    fields = json.loads(fields_str)
+                except Exception:
+                    fields = {}
+            else:
+                fields = fields_str
+            result.append({"id": r.get("id"), **fields})
+        page_token = data.get("data", {}).get("page_token")
+        if not page_token or not records:
+            break
     return result
 
 def create_record(file_id: str, sheet_id: str, fields: dict) -> dict:
@@ -312,29 +320,44 @@ def sync_customers(start_date: str, end_date: str, cfg: dict) -> dict:
         # 没有获取到可选值，使用默认兜底列表
         work_type_options = ["客户交流（线上）", "客户交流（线下）", "方案编写", "POC 支持", "培训学习", "其他"]
 
-    # 2. 读取个人日记记录
-    # 注：WPS Date 字段不支持服务端 filter（GreaterThan/LessThan 返回 Unknown enum），
-    #     因此全量拉取 + 客户端日期过滤
-    records = list_records(personal_file_id, "2", page_size=100)
+    # 2. 服务端过滤日期范围（Greater/Less 支持文本格式日期 "2026/03/24"）
+    #    start_date/end_date 格式为 "2026-03-24"，转为 "2026/03/24"
+    sd = start_date.replace("-", "/")
+    ed = end_date.replace("-", "/")
+    # 边界处理：Less 用 end+1天 确保包含 end 当天
+    ed_plus = (datetime.strptime(ed, "%Y/%m/%d") + timedelta(days=1)).strftime("%Y/%m/%d")
+    if sd == ed:
+        diary_filter = {"mode": "AND", "criteria": [{"field": "记录时间", "operator": "equals", "values": [sd]}]}
+    else:
+        diary_filter = {"mode": "AND", "criteria": [
+            {"field": "记录时间", "operator": "greater", "values": [sd]},
+            {"field": "记录时间", "operator": "less", "values": [ed_plus]},
+        ]}
+
+    records = list_records(personal_file_id, "2", filter_body=diary_filter)
 
     # 3. 筛选日期范围内 + 工作类型在配置的可同步类型列表中
     sync_types = cfg.get("sync", {}).get("sync_types", ["客户跟进"])
 
-    # 先查团队已有记录（客户端按日期范围过滤，再用内容哈希去重）
-    team_records = list_records(team_file_id, team_sheet_id, page_size=100)
+    # 先查团队已有记录（服务端日期过滤 + 内容哈希去重）
+    if sd == ed:
+        team_filter = {"mode": "AND", "criteria": [{"field": "填写日期", "operator": "equals", "values": [sd]}]}
+    else:
+        team_filter = {"mode": "AND", "criteria": [
+            {"field": "填写日期", "operator": "greater", "values": [sd]},
+            {"field": "填写日期", "operator": "less", "values": [ed_plus]},
+        ]}
+    team_records = list_records(team_file_id, team_sheet_id, filter_body=team_filter)
     existing_hashes = set()
     for r in team_records:
-        team_date = str(r.get("填写日期", ""))[:10].replace("/", "-")
-        if start_date <= team_date <= end_date:
-            content = f"{r.get('工作内容', '')}|{r.get('工作类型', '')}"
-            existing_hashes.add(hashlib.md5(content.encode()).hexdigest())
+        content = f"{r.get('工作内容', '')}|{r.get('工作类型', '')}"
+        existing_hashes.add(hashlib.md5(content.encode()).hexdigest())
 
-    # 筛选个人记录（按配置的可同步类型过滤 + 客户端日期过滤）
+    # 筛选个人记录（日期已在服务端过滤，只需按配置的工作类型过滤）
     matched = []
     for r in records:
-        rec_date = str(r.get(field_mapping.get("记录时间", "记录时间"), ""))[:10].replace("/", "-")
         work_type = str(r.get(field_mapping.get("工作类型", "工作类型"), ""))
-        if rec_date >= start_date and rec_date <= end_date and work_type in sync_types:
+        if work_type in sync_types:
             matched.append(r)
 
     if not matched:

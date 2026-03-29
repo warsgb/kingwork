@@ -481,5 +481,5 @@ def print_exec_summary(updated_tables: list = None):
             table_name = SHEET_NAME_MAP.get(table_key, table_key)
             print(f"  - {table_name}")
     # 链接独立一行，用 <> 包起来，聊天界面可直接点击
-    print(f"\n🔗 多维表链接：<{cfg.dbt_link}>")
+    print(f"\n🔗 多维表：[多维表]({cfg.dbt_link})")
     print("=" * 60 + "\n")

@@ -412,8 +412,8 @@ class KingWorkTables:
         filter_body = {
             "mode": "AND",
             "criteria": [
-                {"field": "状态", "operator": "NotEqu", "values": ["已完成"]},
-                {"field": "状态", "operator": "NotEqu", "values": ["已取消"]},
+                {"field": "状态", "operator": "notequ", "values": ["已完成"]},
+                {"field": "状态", "operator": "notequ", "values": ["已取消"]},
             ]
         }
         try:
@@ -443,8 +443,8 @@ class KingWorkTables:
         filter_body = {
             "mode": "AND",
             "criteria": [
-                {"field": "客户状态", "operator": "NotEqu", "values": ["成交"]},
-                {"field": "客户状态", "operator": "NotEqu", "values": ["流失"]},
+                {"field": "客户状态", "operator": "notequ", "values": ["成交"]},
+                {"field": "客户状态", "operator": "notequ", "values": ["流失"]},
             ]
         }
         try:
@@ -478,31 +478,72 @@ class KingWorkTables:
                 result.append({"id": rec["id"], "fields": fields, "days_inactive": 999})
         return result
 
-    def get_records_in_period(self, sheet_key: str, time_field: str, start_dt, end_dt) -> List[dict]:
-        """获取指定时间范围内的记录，优先使用服务端筛选，失败时降级为客户端过滤。"""
+    def _build_date_filter(self, time_field: str, start_dt, end_dt) -> Optional[dict]:
+        """
+        构建日期过滤条件，使用 ISO 字符串 + Greater/Less 操作符。
+        WPS 多维表文本格式字段("2026/03/29")支持 Greater/Less 字符串比较。
+        """
+        from datetime import datetime, timezone, timedelta
+        import calendar
+        tz_cst = timezone(timedelta(hours=8))
+        now = datetime.now(tz=tz_cst)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        def is_same_day(dt, target):
+            return dt.year == target.year and dt.month == target.month and dt.day == target.day
+
+        # ── 日期过滤：文本格式 "2026/03/29"，用字符串比较 ──
+        # WPS 的 Greater/Less 是严格 >/<，对边界日期需要特殊处理
+        # 策略：end_str 往后延一天（"2026/03/29" -> "2026/03/30"）来包含 end 当天的记录
+        from datetime import timedelta
+        start_str = start_dt.strftime("%Y/%m/%d")
+        end_str = (end_dt + timedelta(days=1)).strftime("%Y/%m/%d")
+
+        # 统一用 greater/less 范围查询（Date 字段的 equals 服务端过滤不稳定，
+        # 而 greater/less 对 "2026/03/29" 字符串比较是稳定的）
+        return {
+            "mode": "AND",
+            "criteria": [
+                {"field": time_field, "operator": "greater", "values": [start_str]},
+                {"field": time_field, "operator": "less",    "values": [end_str]},
+            ]
+        }
+
+    def _parse_record_time(self, time_field: str, fields: dict):
+        """解析记录中时间字段为 datetime，失败返回 None。"""
         from datetime import datetime, timezone, timedelta
         tz_cst = timezone(timedelta(hours=8))
+        t = fields.get(time_field)
+        if not t:
+            return None
+        try:
+            if isinstance(t, (int, float)):
+                return datetime.fromtimestamp(t / 1000, tz=tz_cst)
+            from dateutil import parser as dp
+            dt = dp.parse(str(t))
+            return dt if dt.tzinfo else dt.replace(tzinfo=tz_cst)
+        except Exception:
+            return None
 
-        # WPS Date 字段不支持服务端 filter（GreaterThan/LessThan 返回 Unknown enum value），
-        # 只能全量拉取 + 客户端内存过滤。
-        # 若 WPS 后续支持 Date filter，可在此恢复服务端筛选。
+    def get_records_in_period(self, sheet_key: str, time_field: str, start_dt, end_dt) -> List[dict]:
+        """获取指定时间范围内的记录，优先使用服务端 Greater/Less 筛选，失败时降级为客户端过滤。"""
+        # 方案1：尝试 Greater/Less 服务端筛选
+        filter_body = self._build_date_filter(time_field, start_dt, end_dt)
+        if filter_body:
+            try:
+                records = self.list_all_records(sheet_key, filter_body=filter_body)
+                if records:
+                    return [{"id": rec["id"], "fields": self.get_record_fields(rec)} for rec in records]
+            except Exception:
+                pass
+
+        # 降级：全量拉取 + 客户端内存过滤
         records = self.list_all_records(sheet_key)
         result = []
         for rec in records:
             fields = self.get_record_fields(rec)
-            t = fields.get(time_field)
-            if not t:
-                continue
-            try:
-                if isinstance(t, (int, float)):
-                    dt = datetime.fromtimestamp(t / 1000, tz=tz_cst)
-                else:
-                    from dateutil import parser as dp
-                    dt = dp.parse(str(t))
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=tz_cst)
-                if start_dt <= dt <= end_dt:
-                    result.append({"id": rec["id"], "fields": fields})
-            except Exception:
-                pass
+            dt = self._parse_record_time(time_field, fields)
+            if dt and start_dt <= dt <= end_dt:
+                result.append({"id": rec["id"], "fields": fields})
         return result

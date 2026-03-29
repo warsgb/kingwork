@@ -121,9 +121,10 @@ def cmd_stats(tables: KingWorkTables, args):
         todos = tables.get_pending_todos()
         completed = []
         try:
-            all_todos = tables.list_all_records("todo_records")
-            completed = [r for r in all_todos
-                         if tables.get_record_fields(r).get("状态") == "已完成"]
+            # 服务端过滤：状态 Equals "已完成"
+            completed = tables.list_all_records("todo_records", filter_body={
+                "criteria": [{"field": "状态", "operator": "equals", "values": ["已完成"]}]
+            })
         except Exception:
             pass
 
@@ -325,12 +326,13 @@ def cmd_search(tables: KingWorkTables, keyword: str):
 
     total = 0
 
-    # 搜索客户档案
-    customers = tables.list_all_records("customer_profiles")
-    matched_customers = [
-        r for r in customers
-        if keyword in (tables.get_record_fields(r).get("客户名称") or "")
-    ]
+    # 搜索客户档案（服务端 Contains 过滤）
+    try:
+        matched_customers = tables.list_all_records("customer_profiles", filter_body={
+            "criteria": [{"field": "客户名称", "operator": "Contains", "values": [keyword]}]
+        })
+    except Exception:
+        matched_customers = []
     if matched_customers:
         print(f"### 客户档案（{len(matched_customers)} 条）")
         for r in matched_customers:
@@ -339,24 +341,28 @@ def cmd_search(tables: KingWorkTables, keyword: str):
         print()
         total += len(matched_customers)
 
-    # 搜索日记记录
-    diary_all = tables.list_all_records("diary_records")
-    matched_diary = [
-        r for r in diary_all
-        if keyword in (tables.get_record_fields(r).get("内容") or "")
-        or keyword in (tables.get_record_fields(r).get("关联客户") or "")
-    ]
-    if matched_diary:
-        print(f"### 工作日记（{len(matched_diary)} 条）")
-        for r in matched_diary[:5]:
+    # 搜索日记记录（服务端 OR + Contains 过滤）
+    try:
+        diary_all = tables.list_all_records("diary_records", filter_body={
+            "mode": "OR",
+            "criteria": [
+                {"field": "内容", "operator": "Contains", "values": [keyword]},
+                {"field": "关联客户", "operator": "Contains", "values": [keyword]},
+            ]
+        })
+    except Exception:
+        diary_all = []
+    if diary_all:
+        print(f"### 工作日记（{len(diary_all)} 条）")
+        for r in diary_all[:5]:
             f = tables.get_record_fields(r)
             content = (f.get("内容") or "")[:100]
             work_type = f.get("工作类型") or ""
             print(f"  - [{work_type}] {content}")
-        if len(matched_diary) > 5:
-            print(f"  ... 还有 {len(matched_diary) - 5} 条")
+        if len(diary_all) > 5:
+            print(f"  ... 还有 {len(diary_all) - 5} 条")
         print()
-        total += len(matched_diary)
+        total += len(diary_all)
 
     if total == 0:
         print(f"未找到包含「{keyword}」的记录")

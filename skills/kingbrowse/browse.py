@@ -204,7 +204,7 @@ def search_sheet(
     filter_body = {
         "mode": "OR",
         "criteria": [
-            {"field": f, "operator": "Contains", "values": [keyword]}
+            {"field": f, "operator": "contains", "values": [keyword]}
             for f in search_fields
         ]
     }

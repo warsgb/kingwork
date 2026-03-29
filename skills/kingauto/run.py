@@ -276,38 +276,7 @@ def get_chat_messages(start_dt: datetime, end_dt: datetime, verbose: bool = Fals
             print(f"  【{chat_name}】找到 {len(session_messages)} 条消息")
         processed_messages.extend(session_messages)
     
-    # 3. 拉取单聊消息：每个单聊会话单独搜索
-    p2p_chats = [c for c in conversations if c.get("type") == "p2p"]
-    if verbose:
-        print(f"  拉取单聊消息：共 {len(p2p_chats)} 个单聊会话")
-    
-    for chat in p2p_chats:
-        chat_id = chat.get("id")
-        chat_name = chat.get("name", "未知用户")
-        if not chat_id:
-            continue
-        # 检查该会话最后消息时间是否在范围内
-        last_msg_time = chat.get("last_message", {}).get("ctime")
-        if last_msg_time:
-            try:
-                import dateutil.parser
-                dt = dateutil.parser.isoparse(last_msg_time)
-                if dt.timestamp() < start_dt.timestamp() or dt.timestamp() > end_dt.timestamp():
-                    continue  # 该会话今天没有消息，跳过
-            except:
-                pass
-        # 拉取该会话的消息
-        result = run_wps365_skill("im", "search-messages",
-                                  "--chat-ids", str(chat_id),
-                                  "--keyword", "",
-                                  "--start-time", start_iso,
-                                  "--end-time", end_iso)
-        if result.get("error"):
-            continue
-        p2p_messages = _extract_json_list_from_output(result.get("stdout", ""), key="items")
-        if verbose:
-            print(f"  【{chat_name}】找到 {len(p2p_messages)} 条消息")
-        processed_messages.extend(p2p_messages)
+    # 3. 注意：p2p 消息已在步骤2中随所有会话一起拉取，无需重复拉取
     
     # 4. 按会话分组汇总聊天内容，生成总结，避免逐条插入
     final_messages = []
@@ -780,18 +749,26 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
             return [f"[DRY RUN] 跳过 {work_type}（无具体客户/项目，仅生成惊喜记录）"]
     
     # 调试打印已关闭
-    
-    diary_id = ""
-    # 需要明确客户/项目才能写日记的类型
-    require_customer_or_project = ["客户跟进"]
-    # 横向支持、团队事务：不要求客户/项目可直接写日记
-    always_write_diary = ["横向支持", "团队事务"]
-    diary_write_types = require_customer_or_project + always_write_diary
 
-    should_write_diary = (
-        (work_type in always_write_diary) or
-        (work_type in require_customer_or_project and (has_customer or has_project))
-    )
+    # doc 类型：禁止写入日记记录，只能写入惊喜文档
+    is_doc_item = (item_type == "doc")
+
+    if is_doc_item:
+        should_write_diary = False
+        diary_id = ""
+        results.append(f"ℹ️  文档查看类不写入日记，仅归档惊喜文档")
+    else:
+        diary_id = ""
+        # 需要明确客户/项目才能写日记的类型
+        require_customer_or_project = ["客户跟进"]
+        # 横向支持、团队事务：不要求客户/项目可直接写日记
+        always_write_diary = ["横向支持", "团队事务"]
+        diary_write_types = require_customer_or_project + always_write_diary
+
+        should_write_diary = (
+            (work_type in always_write_diary) or
+            (work_type in require_customer_or_project and (has_customer or has_project))
+        )
 
     if should_write_diary:
         # 写入日记记录（主表）
@@ -1489,7 +1466,7 @@ def main():
             print(f"   💡 灵感记录：{stats['idea']} 条")
         if stats["surprise"] > 0:
             print(f"   ✨ 惊喜内容：{stats['surprise']} 条")
-        print(f"   🔗 查看多维表：<https://www.kdocs.cn/l/cbMwPNjcGRwD>")
+        print(f"   🔗 查看多维表：[多维表](https://www.kdocs.cn/l/cbMwPNjcGRwD)")
 
 
 if __name__ == "__main__":
