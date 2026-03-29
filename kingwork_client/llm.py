@@ -3,6 +3,7 @@
 KingWork LLM 客户端封装
 支持 MiniMax API，兼容 OpenAI 格式
 """
+from __future__ import annotations
 import json
 import time
 import requests
@@ -107,17 +108,48 @@ class KingWorkLLMClient(KingWorkBase):
         result = self._call(prompt, require_json=True)
         return result if isinstance(result, dict) else {}
 
-    def classify_work(self, content: str, existing_customers: list, existing_projects: list) -> dict:
-        """工作日记分类与信息提取（供 kingrecord 使用）。
+    # ------------------------------------------------------------------
+    # 新版两步式：Step1 分类 + Step2 提取
+    # ------------------------------------------------------------------
 
-        Args:
-            content: 用户输入的工作内容
-            existing_customers: 已有客户名称列表（用于匹配校验）
-            existing_projects: 已有项目名称列表（用于匹配校验）
+    def classify_work_type(self, content: str) -> dict:
+        """Step1: 轻量分类，只判断工作类型。
 
         Returns:
-            dict，包含 work_type, confidence, extracted_info
+            dict，包含 work_type, confidence, reason
         """
+        prompt = self.get_prompt("work_type_classification").format(
+            user_input=content,
+        )
+        result = self._call(prompt, require_json=True)
+        if isinstance(result, dict) and result.get("work_type"):
+            return result
+        return {"work_type": "其他", "confidence": 0.0, "reason": "分类失败"}
+
+    def extract_work_info(self, content: str, work_type: str,
+                          existing_customers: list, existing_projects: list) -> dict:
+        """Step2: 基于已确定的类型，定向提取结构化信息。
+
+        Returns:
+            dict，提取到的字段
+        """
+        prompt = self.get_prompt("work_info_extraction").format(
+            user_input=content,
+            work_type=work_type,
+            existing_customers=json.dumps(existing_customers, ensure_ascii=False),
+            existing_projects=json.dumps(existing_projects, ensure_ascii=False),
+        )
+        result = self._call(prompt, require_json=True)
+        if isinstance(result, dict):
+            return result
+        return {}
+
+    # ------------------------------------------------------------------
+    # 旧版一体化方法（保留兼容）
+    # ------------------------------------------------------------------
+
+    def classify_work(self, content: str, existing_customers: list, existing_projects: list) -> dict:
+        """旧版：工作日记分类与信息提取（一体化，保留兼容）。"""
         prompt = self.get_prompt("work_classification").format(
             user_input=content,
             existing_customers=json.dumps(existing_customers, ensure_ascii=False),
@@ -125,7 +157,6 @@ class KingWorkLLMClient(KingWorkBase):
         )
         result = self._call(prompt, require_json=True)
         if isinstance(result, dict):
-            # 确保 extracted_info 存在
             if "extracted_info" not in result:
                 result["extracted_info"] = {}
         else:
@@ -160,7 +191,24 @@ class KingWorkLLMClient(KingWorkBase):
                     if resp.status_code >= 500:
                         print(f"  ⚠️ 服务端错误 {resp.status_code}（{model_name}），重试...")
                         time.sleep(2 ** attempt)
-                        continue
+                        # 重试耗尽后，额外等待60s再重试一次该模型，然后再考虑切换
+                        if attempt == self.max_retries - 1:
+                            print(f"  ⏳ 等待 60s 后再次尝试 {model_name}...")
+                            time.sleep(60)
+                            try:
+                                resp = requests.post(
+                                    self.endpoint,
+                                    headers={"Authorization": f"Bearer {self.api_key}"},
+                                    json=body,
+                                    timeout=self.timeout,
+                                )
+                                if resp.status_code == 200:
+                                    print(f"  ✅ 60s 后重试 {model_name} 成功")
+                                    return self._parse_response(resp.json(), require_json)
+                                else:
+                                    print(f"  ⚠️ 60s 后重试仍失败（{resp.status_code}），切换模型...")
+                            except Exception as e:
+                                print(f"  ⚠️ 60s 后重试仍失败（{e}），切换模型...")
                     data = resp.json()
                     if data.get("error"):
                         raise Exception(data["error"])

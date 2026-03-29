@@ -12,11 +12,15 @@ import os
 import json
 import subprocess
 
-# kingwork 根目录
-KINGWORK_ROOT = "/root/.openclaw/skills/kingwork"
-WPS365_ROOT = "/root/.openclaw/skills/wps365-skill"
+# kingwork 根目录（动态获取，兼容 Mac/Linux/Windows）
+from pathlib import Path
+KINGWORK_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 sys.path.insert(0, KINGWORK_ROOT)
-sys.path.insert(0, WPS365_ROOT)
+
+from kingwork_client.base import get_wps365_root as _get_wps365_root
+WPS365_ROOT = str(_get_wps365_root())
+if WPS365_ROOT not in sys.path:
+    sys.path.insert(0, WPS365_ROOT)
 os.chdir(KINGWORK_ROOT)
 
 import kingwork_client.llm as kingwork_llm
@@ -185,7 +189,7 @@ def process_url(url: str, content_text: str = "", title: str = "") -> dict:
 
     try:
         cmd = [
-            "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+            sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
             "create-records", file_id, str(sheet_id_num),
             "--json", json.dumps([record], ensure_ascii=False)
         ]

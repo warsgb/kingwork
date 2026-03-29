@@ -17,6 +17,13 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# 将 kingwork 根目录加入 path
+_root = Path(__file__).resolve().parent.parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from kingwork_client.base import get_wps365_root as _get_wps365_root
+
 # 全局表映射缓存
 _sheet_map = None
 
@@ -41,9 +48,9 @@ def get_sheet_id(table_name: str) -> int:
     
     # 没有映射或者不匹配，自动拉取生成
     if _sheet_map is None or table_name not in _sheet_map:
-        wps_skill_path = "/root/.openclaw/skills/wps365-skill"
+        wps_skill_path = str(_get_wps365_root())
         cmd = [
-            "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+            sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
             "schema", current_file_id, "--json"
         ]
         try:
@@ -214,7 +221,7 @@ def get_chat_messages(start_dt: datetime, end_dt: datetime, verbose: bool = Fals
     """获取时间范围内的聊天消息（包含所有群聊+单聊）。"""
     start_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%S+08:00")
     end_iso = end_dt.strftime("%Y-%m-%dT%H:%M:%S+08:00")
-    wps_skill_path = os.environ.get("WPS365_SKILL_PATH", "/root/.openclaw/skills/wps365-skill")
+    wps_skill_path = str(_get_wps365_root())
     
     processed_messages = []
     
@@ -223,7 +230,7 @@ def get_chat_messages(start_dt: datetime, end_dt: datetime, verbose: bool = Fals
     
     # 1. 先拉取最近100个会话，包含群聊和单聊
     cmd = [
-        "python", f"{wps_skill_path}/skills/im/run.py",
+        sys.executable, str(Path(wps_skill_path) / "skills" / "im" / "run.py"),
         "recent", "--page-size", "100"
     ]
     try:
@@ -591,7 +598,7 @@ def get_documents(start_dt: datetime, end_dt: datetime, verbose: bool = False) -
     # 直接调用命令行，绕过封装函数
     import subprocess
     cmd = [
-        "python", "/root/.openclaw/skills/wps365-skill/skills/drive/run.py",
+        sys.executable, str(Path(_get_wps365_root()) / "skills" / "drive" / "run.py"),
         "latest"
     ]
     try:
@@ -883,16 +890,20 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
         import subprocess
         import json
         import re
-        wps_skill_path = "/root/.openclaw/skills/wps365-skill"
-        file_id = os.environ.get("KINGWORK_FILE_ID", "")
+        wps_skill_path = str(_get_wps365_root())
+        file_id = tables.file_id if tables else os.environ.get("KINGWORK_FILE_ID", "")
         if not file_id:
+            from kingwork_client.base import get_file_id
+            file_id = get_file_id()
+        if not file_id:
+            results.append("❌ 惊喜记录写入失败：未获取到 file_id")
             return results
         # 从extracted里获取项目和客户
         project = extracted.get("project", "")
         customer = extracted.get("customer", "")
         try:
             if item_type == "message":
-                # 惊喜沟通记录：从配置读取sheet_id
+                # 21惊喜沟通记录：从配置读取sheet_id
                 sheet_id = tables.sheet_ids['surprise_communications']
                 # 提取沟通对象
                 chat_info = item.get("chat", {})
@@ -903,11 +914,11 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                 else:
                     communication_person = item.get("message", {}).get("sender", {}).get("name", "未知")
 
-                # 去重：查询同时间段已有惊喜沟通记录，判断内容是否相似
+                # 去重：查询同时间段已有21惊喜沟通记录，判断内容是否相似
                 comm_is_dup = False
                 try:
                     cmd_search = [
-                        "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                         "list-records", file_id, str(sheet_id),
                         "--page-size", "50"
                     ]
@@ -932,7 +943,7 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                                     stored_content = fields.get("惊喜内容", "")[:100]
                                     similarity = difflib.SequenceMatcher(None, content[:100], stored_content).ratio()
                                     if similarity > 0.85:
-                                        results.append(f"🔄 惊喜沟通记录去重（相似度{similarity:.0%}）：{communication_person}")
+                                        results.append(f"🔄 21惊喜沟通记录去重（相似度{similarity:.0%}）：{communication_person}")
                                         comm_is_dup = True
                                         break
                                 except Exception:
@@ -985,14 +996,14 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                         "创建时间": today_str()
                     }]
                     cmd = [
-                        "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                         "create-records", file_id, str(sheet_id),
                         "--json", json.dumps(record_data, ensure_ascii=False)
                     ]
                     subprocess.check_output(cmd, timeout=10)
-                    results.append(f"✨ 惊喜沟通记录：已创建（对象：{communication_person}）")
+                    results.append(f"✨ 21惊喜沟通记录：已创建（对象：{communication_person}）")
             elif item_type == "doc":
-                # 惊喜文档记录：从配置读取sheet_id
+                # 20惊喜文档记录：从配置读取sheet_id
                 sheet_id = tables.sheet_ids['surprise_docs']
                 doc_name = item.get("file", {}).get("name") or "未知文档"
                 doc_url = item.get("file", {}).get("link_url") or ""
@@ -1002,9 +1013,9 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                 existing_doc_id = None
                 existing_count = 1
                 try:
-                    # 全局查询所有惊喜文档记录
+                    # 全局查询所有20惊喜文档记录
                     cmd_search = [
-                        "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                         "list-records", file_id, str(sheet_id),
                         "--page-size", "500"
                     ]
@@ -1077,11 +1088,11 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                         llm_ext = (llm_doc_reason.get("extracted_info") or {}) if llm_doc_reason else {}
                         doc_surprise_reason = llm_ext.get("surprise_reason") or llm_ext.get("value_point") or f"文档被关注{existing_count}次，可能有重要价值"
                         update_data["惊喜原因"] = doc_surprise_reason
-                        results.append(f"✨ 惊喜文档记录：已更新关注次数（{doc_name}，第{existing_count}次）✨ LLM分析：{doc_surprise_reason[:50]}")
+                        results.append(f"✨ 20惊喜文档记录：已更新关注次数（{doc_name}，第{existing_count}次）✨ LLM分析：{doc_surprise_reason[:50]}")
                     else:
-                        results.append(f"✨ 惊喜文档记录：已更新关注次数（{doc_name}，第{existing_count}次）")
+                        results.append(f"✨ 20惊喜文档记录：已更新关注次数（{doc_name}，第{existing_count}次）")
                     cmd_update = [
-                        "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                         "update-records", file_id, str(sheet_id),
                         "--json", json.dumps([{"id": existing_doc_id, "fields_value": json.dumps(update_data, ensure_ascii=False)}])
                     ]
@@ -1119,19 +1130,19 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                         "创建时间": today_str()
                     }]
                     cmd = [
-                        "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                         "create-records", file_id, str(sheet_id),
                         "--json", json.dumps(record_data, ensure_ascii=False)
                     ]
                     subprocess.check_output(cmd, timeout=10)
-                    results.append(f"✨ 惊喜文档记录：已创建（{doc_name}）")
+                    results.append(f"✨ 20惊喜文档记录：已创建（{doc_name}）")
 
             elif item_type == "meeting":
-                # 惊喜会议记录
+                # 22惊喜会议记录
                 try:
                     sheet_id = tables.sheet_ids.get("surprise_meetings")
                     if not sheet_id:
-                        results.append("ℹ️  惊喜会议记录表未初始化，跳过写入")
+                        results.append("ℹ️  22惊喜会议记录表未初始化，跳过写入")
                     else:
                         meeting_name = item.get("subject") or item.get("meeting_name") or "未知会议"
                         meeting_url = item.get("join_url") or item.get("meeting_url") or ""
@@ -1180,14 +1191,14 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                                 "创建时间": today_str()
                             }]
                             cmd = [
-                                "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                                sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                                 "create-records", file_id, str(sheet_id),
                                 "--json", json.dumps(record_data, ensure_ascii=False)
                             ]
                             subprocess.check_output(cmd, timeout=10)
-                            results.append(f"✨ 惊喜会议记录：已创建（{meeting_name}）")
+                            results.append(f"✨ 22惊喜会议记录：已创建（{meeting_name}）")
                 except Exception as e:
-                    results.append(f"❌ 惊喜会议记录写入失败：{e}")
+                    results.append(f"❌ 22惊喜会议记录写入失败：{e}")
 
         except Exception as e:
             results.append(f"❌ 惊喜记录写入失败：{e}")

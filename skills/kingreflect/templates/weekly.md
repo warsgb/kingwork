@@ -16,9 +16,6 @@
 ## 🤝 横向支持
 {support_records}
 
-## ✨ 本周惊喜
-{surprises}
-
 ## 📝 未完成待办
 {pending_todos}
 

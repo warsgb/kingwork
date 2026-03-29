@@ -65,6 +65,18 @@ browse_sources:
           - "效果"
           - "数据源"
 
+  # KingWork 个人多维表 — 惊喜文档记录
+  - file_id: "cbMwPNjcGRwD"
+    file_name: "KingWork工作管理"
+    sheets:
+      - sheet_name: "20惊喜文档记录"
+        search_fields:
+          - "文档名称"
+          - "惊喜原因"
+        name_field: "文档名称"
+        link_fields:
+          - "文档链接"
+
   # 预留：其他独立多维表（等做好后在此添加）
   # - file_id: "xxxxxxxx"
   #   file_name: "客户资料库"

@@ -7,6 +7,7 @@ kingclip - 灵感收藏技能
 用法：
     python run.py process <url>
 """
+from __future__ import annotations
 import re
 import sys
 import os
@@ -17,11 +18,13 @@ import argparse
 from datetime import datetime
 
 # ------------------------------------------------------------------
-# 路径配置
+# 路径配置（动态获取，兼容不同部署环境）
 # ------------------------------------------------------------------
-KINGWORK_ROOT = "/root/.openclaw/skills/kingwork"
-WPS365_ROOT = "/root/.openclaw/skills/wps365-skill"
-KINGWORK_FILE_ID = "cbMwPNjcGRwD"
+KINGWORK_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+WPS365_ROOT = os.environ.get(
+    "WPS365_SKILL_PATH",
+    os.path.abspath(os.path.join(KINGWORK_ROOT, "..", "..", "official", "wps365-skill"))
+)
 IDEA_SHEET_ID = "10"
 # 灵感收藏文件夹（我的文档/灵感收藏）parent_id
 INSPIRATION_FOLDER_ID = "fq26KPJnmxMSVZhxtHc6rxGMzxMnUjsLf"
@@ -29,6 +32,10 @@ INSPIRATION_FOLDER_ID = "fq26KPJnmxMSVZhxtHc6rxGMzxMnUjsLf"
 sys.path.insert(0, KINGWORK_ROOT)
 sys.path.insert(0, WPS365_ROOT)
 os.chdir(KINGWORK_ROOT)
+
+# 从配置文件动态读取 file_id
+from kingwork_client.base import get_file_id as _get_file_id
+KINGWORK_FILE_ID = _get_file_id()
 
 
 # ------------------------------------------------------------------
@@ -314,7 +321,7 @@ def process_url(url: str) -> dict:
 
     try:
         cmd = [
-            "python", f"{WPS365_ROOT}/skills/dbsheet/run.py",
+            sys.executable, f"{WPS365_ROOT}/skills/dbsheet/run.py",
             "create-records", KINGWORK_FILE_ID, IDEA_SHEET_ID,
             "--json", json.dumps([record], ensure_ascii=False)
         ]
@@ -432,7 +439,7 @@ def main():
             }
             try:
                 cmd = [
-                    "python", f"{WPS365_ROOT}/skills/dbsheet/run.py",
+                    sys.executable, f"{WPS365_ROOT}/skills/dbsheet/run.py",
                     "create-records", KINGWORK_FILE_ID, IDEA_SHEET_ID,
                     "--json", json.dumps([record], ensure_ascii=False)
                 ]

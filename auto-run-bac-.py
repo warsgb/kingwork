@@ -17,6 +17,12 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# 将 kingwork 根目录加入 path
+_root = Path(__file__).resolve().parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+from kingwork_client.base import get_wps365_root as _get_wps365_root
+
 # 全局表映射缓存
 _sheet_map = None
 
@@ -41,9 +47,9 @@ def get_sheet_id(table_name: str) -> int:
     
     # 没有映射或者不匹配，自动拉取生成
     if _sheet_map is None or table_name not in _sheet_map:
-        wps_skill_path = "/root/.openclaw/skills/wps365-skill"
+        wps_skill_path = str(_get_wps365_root())
         cmd = [
-            "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+            sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
             "schema", current_file_id, "--json"
         ]
         try:
@@ -202,7 +208,7 @@ def get_chat_messages(start_dt: datetime, end_dt: datetime, verbose: bool = Fals
     """获取时间范围内的聊天消息（包含所有群聊+单聊）。"""
     start_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%S+08:00")
     end_iso = end_dt.strftime("%Y-%m-%dT%H:%M:%S+08:00")
-    wps_skill_path = os.environ.get("WPS365_SKILL_PATH", "/root/.openclaw/skills/wps365-skill")
+    wps_skill_path = str(_get_wps365_root())
     
     processed_messages = []
     
@@ -211,7 +217,7 @@ def get_chat_messages(start_dt: datetime, end_dt: datetime, verbose: bool = Fals
     
     # 1. 先拉取最近100个会话，包含群聊和单聊
     cmd = [
-        "python", f"{wps_skill_path}/skills/im/run.py",
+        sys.executable, str(Path(wps_skill_path) / "skills" / "im" / "run.py"),
         "recent", "--page-size", "100"
     ]
     try:
@@ -466,7 +472,7 @@ def get_documents(start_dt: datetime, end_dt: datetime, verbose: bool = False) -
     # 直接调用命令行，绕过封装函数
     import subprocess
     cmd = [
-        "python", "/root/.openclaw/skills/wps365-skill/skills/drive/run.py",
+        sys.executable, str(Path(_get_wps365_root()) / "skills" / "drive" / "run.py"),
         "latest"
     ]
     try:
@@ -722,7 +728,7 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
         import subprocess
         import json
         import re
-        wps_skill_path = "/root/.openclaw/skills/wps365-skill"
+        wps_skill_path = str(_get_wps365_root())
         file_id = os.environ.get("KINGWORK_FILE_ID", "")
         if not file_id:
             return results
@@ -780,7 +786,7 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                     "创建时间": today_str()
                 }]
                 cmd = [
-                    "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                    sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                     "create-records", file_id, str(sheet_id),
                     "--json", json.dumps(record_data, ensure_ascii=False)
                 ]
@@ -837,7 +843,7 @@ def write_to_tables(tables: KingWorkTables, analysis: dict, content: str,
                     "创建时间": today_str()
                 }]
                 cmd = [
-                    "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                    sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                     "create-records", file_id, str(sheet_id),
                     "--json", json.dumps(record_data, ensure_ascii=False)
                 ]

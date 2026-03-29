@@ -218,11 +218,12 @@ def show_calendar_events(verbose: bool = False):
     start_iso = today.replace(hour=0, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%S+08:00")
     end_iso = today.replace(hour=23, minute=59, second=59).strftime("%Y-%m-%dT%H:%M:%S+08:00")
 
-    wps_skill = "/root/.openclaw/skills/wps365-skill"
+    from kingwork_client.base import get_wps365_root as _get_wps365_root
+    wps_skill = str(_get_wps365_root())
 
     # 1. 先拿日历列表，找到主日历
     list_cal = subprocess.run(
-        [sys.executable, f"{wps_skill}/skills/calendar/run.py", "list-calendars"],
+        [sys.executable, str(Path(wps_skill) / "skills" / "calendar" / "run.py"), "list-calendars"],
         capture_output=True, text=True, timeout=15,
     )
     primary_cal_id = None
@@ -243,7 +244,7 @@ def show_calendar_events(verbose: bool = False):
 
     # 2. 查询日程
     list_ev = subprocess.run(
-        [sys.executable, f"{wps_skill}/skills/calendar/run.py",
+        [sys.executable, str(Path(wps_skill) / "skills" / "calendar" / "run.py"),
          "list-events", primary_cal_id,
          "--start", start_iso, "--end", end_iso],
         capture_output=True, text=True, timeout=15,

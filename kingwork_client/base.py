@@ -5,11 +5,42 @@ KingWork 基础配置和工具函数。
 import os
 import sys
 import json
-import yaml
+import subprocess
 import logging
 import logging.handlers
 from pathlib import Path
 from datetime import datetime, timezone
+
+# ─── 依赖自动安装 ────────────────────────────────────────────────
+# KingWork 依赖 pyyaml、python-dateutil、requests，
+# Comate skill 规范不支持自动安装，在首次 import 时检测并安装。
+_REQUIREMENTS = {
+    "yaml":     "pyyaml>=6.0",
+    "dateutil": "python-dateutil>=2.8.0",
+    "requests": "requests>=2.28.0",
+}
+
+def _ensure_dependencies():
+    """检查并安装缺失的 Python 依赖包（静默，仅缺失时触发）。"""
+    missing = []
+    for mod, pkg in _REQUIREMENTS.items():
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(pkg)
+    if not missing:
+        return
+    pip_cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + missing
+    try:
+        subprocess.check_call(pip_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        # pip 不可用时打印提示，不阻断
+        print(f"⚠️  请手动安装依赖: pip install {' '.join(missing)}", file=sys.__stderr__)
+
+_ensure_dependencies()
+# ─────────────────────────────────────────────────────────────────
+
+import yaml
 
 # 全局日志初始化：同时输出到控制台和文件
 def init_kingwork_logging():
@@ -26,24 +57,20 @@ def init_kingwork_logging():
     logger.addHandler(console_handler)
     
     # 2. 文件输出Handler，自动轮转（100MB/文件，最多保留5个备份）
-    log_path = "/var/log/kingwork_debug.log"
+    # 跨平台日志目录：优先用 tempfile，兼容 Mac/Linux/Windows
+    import tempfile
+    _log_dir = Path(tempfile.gettempdir()) / "kingwork_logs"
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = str(_log_dir / "kingwork_debug.log")
     try:
-        # 尝试写/var/log目录
         file_handler = logging.handlers.RotatingFileHandler(
             log_path, maxBytes=100*1024*1024, backupCount=5, encoding="utf-8"
         )
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except PermissionError:
-        # 无权限则写入用户目录
-        user_log_dir = Path.home() / ".openclaw" / "skills" / "kingwork" / "logs"
-        user_log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = str(user_log_dir / "kingwork_debug.log")
-        file_handler = logging.handlers.RotatingFileHandler(
-            log_path, maxBytes=100*1024*1024, backupCount=5, encoding="utf-8"
-        )
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        # 极端情况：tempdir 也写不了，跳过文件日志
+        pass
     
     # 重定向print和stderr到日志
     class LoggerWriter:
@@ -84,23 +111,29 @@ def _load_config_once():
             _cfg = {}
     return _cfg
 
-# 初始化日志
+# 初始化日志（使用跨平台临时目录）
+import tempfile as _tempfile
+_log_dir2 = Path(_tempfile.gettempdir()) / "kingwork_logs"
+_log_dir2.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("/var/log/kingwork_debug.log", encoding="utf-8"),
+        logging.FileHandler(str(_log_dir2 / "kingwork_debug.log"), encoding="utf-8"),
         logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger("kingwork")
 
 def debug_log(msg: str):
-    """输出调试日志，同时写入控制台和/var/log/kingwork_debug.log"""
+    """输出调试日志"""
     cfg = _load_config_once()
     if cfg.get("debug", {}).get("enable_debug_log", False):
         logger.debug(msg)
 
+
+# Python 解释器路径（兼容不同环境，macOS 无 python 只有 python3）
+PYTHON_BIN = sys.executable or "python3"
 
 # KingWork 根目录
 KINGWORK_ROOT = Path(__file__).resolve().parent.parent
@@ -114,8 +147,14 @@ def get_wps365_root() -> Path:
     skill_path = cfg.get("wps365_skill_path", "")
     if skill_path and not skill_path.startswith("${"):
         return Path(skill_path)
-    # 默认：相邻目录
-    return KINGWORK_ROOT.parent / "wps365-skill"
+    # 默认：先找相邻目录，再找 official/wps365-skill
+    sibling = KINGWORK_ROOT.parent / "wps365-skill"
+    if sibling.exists():
+        return sibling
+    official = KINGWORK_ROOT.parent.parent / "official" / "wps365-skill"
+    if official.exists():
+        return official
+    return sibling  # fallback
 
 
 def get_config() -> dict:
@@ -126,9 +165,14 @@ def get_config() -> dict:
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
+# 别名，供外部简洁调用
+load_config = get_config
+
 
 def get_file_id() -> str:
-    """获取多维表文件 ID（优先环境变量）。"""
+    """获取多维表文件 ID。
+    优先级：环境变量 KINGWORK_FILE_ID > config.file_id > config.personal.dbsheet_id
+    """
     env_id = os.environ.get("KINGWORK_FILE_ID")
     if env_id:
         return env_id
@@ -136,11 +180,49 @@ def get_file_id() -> str:
     file_id = cfg.get("file_id", "")
     if file_id and not file_id.startswith("${"):
         return file_id
+    # 从 personal.dbsheet_id 读取
+    personal_id = cfg.get("personal", {}).get("dbsheet_id", "")
+    if personal_id and not personal_id.startswith("${"):
+        return personal_id
     raise ValueError(
         "未配置多维表文件 ID。\n"
         "请设置环境变量 KINGWORK_FILE_ID，\n"
-        "或运行 python scripts/init_tables.py 初始化。"
+        "或在 config/kingwork.yaml 中配置 personal.dbsheet_id。"
     )
+
+
+_cached_user_name = None
+
+def get_user_name() -> str:
+    """获取当前用户姓名。
+    优先级：config.user_name > WPS API get_current_user > 空字符串
+    结果会缓存，避免重复请求。
+    """
+    global _cached_user_name
+    if _cached_user_name is not None:
+        return _cached_user_name
+    # 1. 从 yaml 配置读取
+    cfg = get_config()
+    name = cfg.get("user_name", "")
+    if name:
+        _cached_user_name = name
+        return name
+    # 2. 从 WPS API 获取
+    try:
+        wps365_root = get_wps365_root()
+        sys.path.insert(0, str(wps365_root))
+        from wpsv7client import get_current_user
+        resp = get_current_user()
+        if resp.get("code") == 0:
+            data = resp.get("data", {})
+            name = data.get("name") or data.get("nick_name") or data.get("alias_name") or ""
+            if name:
+                _cached_user_name = name
+                return name
+    except Exception:
+        pass
+    _cached_user_name = ""
+    return ""
 
 
 def get_sheet_ids() -> dict:
@@ -380,8 +462,8 @@ SHEET_NAME_MAP = {
     "support_records": "07横向支持记录",
     "team_records": "08团队事务记录",
     "idea_records": "09灵感记录",
-    "surprise_docs": "10惊喜文档记录",
-    "surprise_communications": "11惊喜沟通记录"
+    "surprise_docs": "20惊喜文档记录",
+    "surprise_communications": "21惊喜沟通记录"
 }
 
 
@@ -398,5 +480,6 @@ def print_exec_summary(updated_tables: list = None):
         for table_key in updated_tables:
             table_name = SHEET_NAME_MAP.get(table_key, table_key)
             print(f"  - {table_name}")
-    print(f"\n🔗 多维表访问地址：<{cfg.dbt_link}>")
-    print("="*60 + "\n")
+    # 链接独立一行，用 <> 包起来，聊天界面可直接点击
+    print(f"\n🔗 多维表链接：<{cfg.dbt_link}>")
+    print("=" * 60 + "\n")

@@ -366,11 +366,16 @@ def main():
         print(f"✅ 报告已保存到：{output_path.resolve()}")
 
     # ── 写入 WPS 云文档（按周期分文件夹）────────────────────────
+    # 获取用户姓名，用于文件名前缀（格式：姓名_日期）
+    from kingwork_client.base import get_user_name
+    user_name = get_user_name()
+    name_prefix = f"{user_name}_" if user_name else ""
+
     # 确定文件夹和文件名
     if period_type == "daily":
         folder_name = "日报"
         date_str = start_dt.strftime("%Y-%m-%d")
-        report_filename = f"{date_str}.md"
+        report_filename = f"{name_prefix}{date_str}.md"
         title_for_doc = date_str
     elif period_type == "weekly":
         folder_name = "周报"
@@ -379,12 +384,12 @@ def main():
         sunday = end_dt.strftime("%Y-%m-%d")
         week_num = start_dt.isocalendar()[1]
         year = start_dt.year
-        report_filename = f"{year}年第{week_num}周({monday}~{sunday}).md"
+        report_filename = f"{name_prefix}{year}年第{week_num}周({monday}~{sunday}).md"
         title_for_doc = f"{year}年第{week_num}周"
     elif period_type == "monthly":
         folder_name = "月报"
         year_month = start_dt.strftime("%Y-%m")
-        report_filename = f"{year_month}.md"
+        report_filename = f"{name_prefix}{year_month}.md"
         title_for_doc = year_month
     else:  # custom
         # 按日期范围命名
@@ -392,11 +397,11 @@ def main():
         end_str = end_dt.strftime("%Y-%m-%d")
         if start_dt.date() == end_dt.date():
             folder_name = "日报"
-            report_filename = f"{date_str}.md"
+            report_filename = f"{name_prefix}{date_str}.md"
             title_for_doc = date_str
         else:
             folder_name = "自定义"
-            report_filename = f"{date_str}_至_{end_str}.md"
+            report_filename = f"{name_prefix}{date_str}_至_{end_str}.md"
             title_for_doc = f"{date_str} 至 {end_str}"
 
     # 写入临时文件
@@ -406,13 +411,15 @@ def main():
         temp_path = f.name
 
     try:
-        sys.path.insert(0, "/root/.openclaw/skills/wps365-skill")
+        from kingwork_client.base import get_wps365_root as _get_wps365_root
+        sys.path.insert(0, str(_get_wps365_root()))
         from wpsv7client.drive import create_otl_document
         from wpsv7client.drive import get_drive_id as _get_drive_id
         from wpsv7client.airpage import write_airpage_content
 
-        drive_id = _get_drive_id("private")
-        parent_path = ["我的文档", folder_name]
+        # 使用 kingworkteam 团队 drive（ent），不再是个人 space
+        drive_id = "3064807774"
+        parent_path = [folder_name]
 
         # 创建智能文档（自动创建对应文件夹）
         create_resp = create_otl_document(
@@ -432,7 +439,7 @@ def main():
             print(f"\n📄 报告已写入 WPS 云文档")
             print(f"   文件夹：{folder_name}")
             print(f"   文件名：{report_filename}")
-            print(f"   路径：我的文档/{folder_name}")
+            print(f"   路径：kingworkteam/{folder_name}")
             print(f"   链接：{link_url}")
         else:
             print(f"\n⚠️ 云文档创建失败：{create_resp.get('msg', '')}")

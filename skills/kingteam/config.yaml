@@ -5,4 +5,4 @@ sync:
   cycle_days: 1
   last_customer_sync: ""
   last_daily_sync: ""
-  conflict_strategy: "skip"
+  conflict_strategy: "overwrite"

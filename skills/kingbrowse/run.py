@@ -17,7 +17,8 @@ SKILLS_DIR = BROWSE_DIR
 KINGWORK_ROOT = os.path.dirname(os.path.dirname(SKILLS_DIR))
 sys.path.insert(0, os.path.dirname(SKILLS_DIR))  # .../kingwork/skills/ -> 找到 kingbrowse/ 目录
 sys.path.insert(0, KINGWORK_ROOT)
-sys.path.insert(0, "/root/.openclaw/skills/wps365-skill")
+from kingwork_client.base import get_wps365_root as _get_wps365_root
+sys.path.insert(0, str(_get_wps365_root()))
 os.chdir(KINGWORK_ROOT)
 
 from kingbrowse.browse import search

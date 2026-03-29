@@ -21,9 +21,10 @@ SHEET_KEY_NAME_MAP = {
     "support_records": "横向支持记录表",
     "team_records": "团队事务记录表",
     "idea_records": "灵感记录表",
-    "surprise_docs": "惊喜文档记录表",
-    "surprise_communications": "惊喜沟通记录表",
-    "surprise_meetings": "惊喜会议记录表"
+    "surprise_docs": "20惊喜文档记录表",
+    "surprise_communications": "21惊喜沟通记录表",
+    "surprise_meetings": "22惊喜会议记录表",
+    "event_reception": "活动接待记录表"
 }
 
 
@@ -299,6 +300,29 @@ class KingWorkTables:
             fields["关联日记ID"] = kwargs["diary_id"]
         return self.create_record("idea_records", fields)
 
+    def create_event_reception(self, subject: str, content: str, **kwargs) -> Optional[dict]:
+        """创建活动接待记录。"""
+        fields = {
+            "活动时间": kwargs.get("event_time", today_str()),
+            "主题": subject,
+            "内容": content,
+            "来源": kwargs.get("source", "手动输入"),
+            "创建时间": today_str(),
+        }
+        if kwargs.get("reception_target"):
+            fields["接待对象"] = kwargs["reception_target"]
+        if kwargs.get("event_type"):
+            fields["活动类型"] = kwargs["event_type"]
+        if kwargs.get("customer"):
+            fields["关联客户"] = kwargs["customer"]
+        if kwargs.get("project"):
+            fields["关联项目"] = kwargs["project"]
+        if kwargs.get("diary_id"):
+            fields["关联日记ID"] = kwargs["diary_id"]
+        if kwargs.get("remark"):
+            fields["备注"] = kwargs["remark"]
+        return self.create_record("event_reception", fields)
+
     def create_surprise_doc(self, doc_name: str, reason: str, **kwargs) -> Optional[dict]:
         """创建惊喜文档记录。"""
         fields = {
@@ -409,12 +433,26 @@ class KingWorkTables:
         return result
 
     def get_inactive_customers(self, days: int = 15) -> List[dict]:
-        """获取超过 N 天未跟进的客户。"""
+        """获取超过 N 天未跟进的客户，优先使用服务端筛选。"""
         from datetime import datetime, timedelta, timezone
         tz_cst = timezone(timedelta(hours=8))
         cutoff = datetime.now(tz=tz_cst) - timedelta(days=days)
+        cutoff_iso = cutoff.isoformat()
 
-        records = self.list_all_records("customer_profiles")
+        # 服务端筛选：排除已成交/已流失，且最近跟进时间 < cutoff 或为空
+        filter_body = {
+            "mode": "AND",
+            "criteria": [
+                {"field": "客户状态", "operator": "NotEqu", "values": ["成交"]},
+                {"field": "客户状态", "operator": "NotEqu", "values": ["流失"]},
+            ]
+        }
+        try:
+            records = self.list_all_records("customer_profiles", filter_body=filter_body)
+        except Exception:
+            # 服务端筛选失败，降级全量拉取
+            records = self.list_all_records("customer_profiles")
+
         result = []
         for rec in records:
             fields = self.get_record_fields(rec)
@@ -423,12 +461,10 @@ class KingWorkTables:
                 continue
             last_time = fields.get("最近跟进时间")
             if not last_time:
-                # 从未跟进
                 result.append({"id": rec["id"], "fields": fields, "days_inactive": 999})
                 continue
             try:
                 if isinstance(last_time, (int, float)):
-                    # 时间戳（毫秒）
                     dt = datetime.fromtimestamp(last_time / 1000, tz=tz_cst)
                 else:
                     from dateutil import parser as dp
@@ -447,26 +483,9 @@ class KingWorkTables:
         from datetime import datetime, timezone, timedelta
         tz_cst = timezone(timedelta(hours=8))
 
-        # 构建服务端筛选条件（ISO 格式字符串）
-        start_iso = start_dt.isoformat()
-        end_iso = end_dt.isoformat()
-        filter_body = {
-            "mode": "AND",
-            "criteria": [
-                {"field": time_field, "operator": "GreaterThan", "values": [start_iso]},
-                {"field": time_field, "operator": "LessThan", "values": [end_iso]},
-            ]
-        }
-
-        try:
-            records = self.list_all_records(sheet_key, filter_body=filter_body)
-            # 服务端筛选成功，直接返回
-            return [{"id": rec["id"], "fields": self.get_record_fields(rec)} for rec in records]
-        except Exception:
-            # 服务端筛选不支持时，降级为客户端全量拉取 + 内存过滤
-            pass
-
-        # 降级：拉全量，客户端过滤
+        # WPS Date 字段不支持服务端 filter（GreaterThan/LessThan 返回 Unknown enum value），
+        # 只能全量拉取 + 客户端内存过滤。
+        # 若 WPS 后续支持 Date filter，可在此恢复服务端筛选。
         records = self.list_all_records(sheet_key)
         result = []
         for rec in records:

@@ -3,18 +3,22 @@
 kingupdate - 更新 KingWork 多维表记录
 模式B：结构化输出，由 agent 自然语言协调用户交互
 """
+from __future__ import annotations
 import sys
 import os
 import json
 import argparse
 from datetime import datetime, timedelta
+from pathlib import Path
 
 BROWSE_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_DIR = BROWSE_DIR
 KINGWORK_ROOT = os.path.dirname(os.path.dirname(SKILLS_DIR))
 sys.path.insert(0, SKILLS_DIR)
 sys.path.insert(0, KINGWORK_ROOT)
-sys.path.insert(0, "/root/.openclaw/skills/wps365-skill")
+
+from kingwork_client.base import get_wps365_root as _get_wps365_root
+sys.path.insert(0, str(_get_wps365_root()))
 os.chdir(KINGWORK_ROOT)
 
 from wpsv7client import (
@@ -136,6 +140,7 @@ def _match_score(record: dict, cfg: dict, query: str) -> float:
 def _search_table(sheet_key: str, query: str, days: int) -> list[dict]:
     """
     在单张表中搜索近 N 天记录。
+    优先使用服务端日期筛选，失败降级客户端过滤。
     返回匹配结果列表。
     """
     cfg = TABLE_CONFIGS.get(sheet_key, {})
@@ -144,6 +149,9 @@ def _search_table(sheet_key: str, query: str, days: int) -> list[dict]:
         return []
 
     date_field = cfg.get("date_field", "")
+
+    # 注：WPS Date 字段不支持服务端 filter（GreaterThan/LessThan 返回 Unknown enum），
+    #     全量拉取 + 客户端日期过滤
 
     try:
         resp = dbsheet_list_records(
@@ -167,7 +175,7 @@ def _search_table(sheet_key: str, query: str, days: int) -> list[dict]:
             except Exception:
                 continue
 
-        # 日期过滤
+        # 客户端日期过滤
         date_val = fields.get(date_field, "")
         if date_val and not _in_recent(_normalize_date(str(date_val)), days):
             continue

@@ -12,11 +12,15 @@ import time
 import logging
 from typing import Optional
 
-# kingwork + wps365 路径
-KINGWORK_ROOT = "/root/.openclaw/skills/kingwork"
-WPS365_ROOT = "/root/.openclaw/skills/wps365-skill"
+# kingwork + wps365 路径（动态获取，兼容 Mac/Linux/Windows）
+from pathlib import Path
+KINGWORK_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 sys.path.insert(0, KINGWORK_ROOT)
-sys.path.insert(0, WPS365_ROOT)
+
+from kingwork_client.base import get_wps365_root as _get_wps365_root
+WPS365_ROOT = str(_get_wps365_root())
+if WPS365_ROOT not in sys.path:
+    sys.path.insert(0, WPS365_ROOT)
 os.chdir(KINGWORK_ROOT)
 
 import kingwork_client.tables as kt
@@ -68,6 +72,17 @@ def _resolve_link(field_value, field_type: str) -> Optional[str]:
                     return link
         except Exception:
             pass
+        return None
+
+    # MultiLineText / SingleLineText 等：如果内容像 URL，直接返回
+    if isinstance(field_value, str):
+        text = field_value.strip()
+        if text and ("http://" in text or "https://" in text):
+            # 提取第一个 URL
+            for part in text.split():
+                if part.startswith("http://") or part.startswith("https://"):
+                    return part
+            return text
         return None
 
     return None

@@ -23,44 +23,15 @@ _root = Path(__file__).resolve().parent.parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from kingwork_client.base import now_iso, today_str, weekday_cn, print_exec_summary, get_llm_config
+from kingwork_client.base import now_iso, today_str, weekday_cn, print_exec_summary, get_llm_config, get_wps365_root, load_config
 from kingwork_client.llm import LLMClient
 from kingwork_client.tables import KingWorkTables
 
-# 快捷指令映射
-SHORTCUT_MAP = {
-    "k1": "客户跟进",
-    "k2": "待办事项",
-    "k3": "学习成长",
-    "k4": "横向支持",
-    "k5": "团队事务",
-    "k6": "灵感记录",
-}
-
-# 关键词到类型映射
-KEYWORD_MAP = {
-    "客户": "客户跟进",
-    "拜访": "客户跟进",
-    "电话": "客户跟进",
-    "会议": "客户跟进",
-    "演示": "客户跟进",
-    "待办": "待办事项",
-    "任务": "待办事项",
-    "TODO": "待办事项",
-    "学习": "学习成长",
-    "培训": "学习成长",
-    "阅读": "学习成长",
-    "横向": "横向支持",
-    "支持": "横向支持",
-    "协助": "横向支持",
-    "团队": "团队事务",
-    "例会": "团队事务",
-    "讨论": "团队事务",
-    "沟通": "团队事务",
-    "灵感": "灵感记录",
-    "想法": "灵感记录",
-    "创意": "灵感记录",
-}
+# ── 从配置文件动态读取映射表 ──
+_wt_cfg = load_config().get("work_types", {})
+SHORTCUT_MAP = _wt_cfg.get("shortcuts", {})
+KEYWORD_MAP = _wt_cfg.get("keywords", {})
+_DEFAULT_TYPE = _wt_cfg.get("default_type", "其他")
 
 
 def parse_args():
@@ -87,11 +58,19 @@ def get_content_and_type(args):
 
     # 处理快捷指令
     if content in SHORTCUT_MAP:
-        work_type = SHORTCUT_MAP[content]
-        content = args.extra_content or ""
-        if not content:
-            print(f"❌ 请输入内容，例如：python run.py {args.content} \"内容\"")
-            sys.exit(1)
+        mapped = SHORTCUT_MAP[content]
+        if mapped == "__auto__":
+            # 通用记录触发词（kr/记录/记一下/写日记），不预设类型，走 AI 分类
+            content = args.extra_content or ""
+            if not content:
+                print(f"❌ 请输入内容，例如：python run.py {args.content} \"内容\"")
+                sys.exit(1)
+        else:
+            work_type = mapped
+            content = args.extra_content or ""
+            if not content:
+                print(f"❌ 请输入内容，例如：python run.py {args.content} \"内容\"")
+                sys.exit(1)
 
     # 处理关键词
     if args.keyword and not work_type:
@@ -160,12 +139,12 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
                 # 直接调用dbsheet命令创建客户档案，避免封装类依赖问题
                 import subprocess
                 import json
-                wps_skill_path = "/root/.openclaw/skills/wps365-skill"
+                wps_skill_path = str(get_wps365_root())
                 file_id = tables.file_id
                 customer_sheet_id = tables.sheet_ids['customer_profiles']  # 03客户档案 sheet_id 从配置读取
                 # 先查询客户是否存在
                 cmd = [
-                    "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                    sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                     "list-records", file_id, str(customer_sheet_id),
                     "--page-size", "100"
                 ]
@@ -182,7 +161,7 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
                         "跟进次数": 1
                     }]
                     create_cmd = [
-                        "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                         "create-records", file_id, str(customer_sheet_id),
                         "--json", json.dumps(customer_data, ensure_ascii=False)
                     ]
@@ -200,12 +179,12 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
             try:
                 import subprocess
                 import json
-                wps_skill_path = "/root/.openclaw/skills/wps365-skill"
+                wps_skill_path = str(get_wps365_root())
                 file_id = tables.file_id
                 project_sheet_id = tables.sheet_ids['project_profiles']  # 04项目档案 sheet_id 从配置读取
                 # 查询项目是否存在
                 cmd = [
-                    "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                    sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                     "list-records", file_id, str(project_sheet_id),
                     "--page-size", "100"
                 ]
@@ -220,7 +199,7 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
                         "开始时间": today_str()
                     }]
                     create_cmd = [
-                        "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                         "create-records", file_id, str(project_sheet_id),
                         "--json", json.dumps(project_data, ensure_ascii=False)
                     ]
@@ -288,6 +267,8 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
     elif work_type == "横向支持":
         target = extracted.get("support_target") or "同事"
         support_type = extracted.get("support_type")
+        customer = extracted.get("customer") or ""
+        project = extracted.get("project") or ""
 
         rec = tables.create_support_record(
             target=target,
@@ -298,10 +279,50 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
         if rec:
             results.append(f"✅ 横向支持记录表：已创建（支持对象：{target}）")
 
+        # 联动更新：客户档案（如果有客户）
+        if customer:
+            try:
+                tables.update_customer_last_followup(customer)
+                results.append(f"✅ 客户档案：已更新最近跟进时间，跟进次数+1（{customer}）")
+            except Exception:
+                pass
+
+        # 联动更新：项目档案（如果有项目）
+        if project:
+            try:
+                import subprocess, json
+                wps_skill_path = str(get_wps365_root())
+                file_id = tables.file_id
+                project_sheet_id = tables.sheet_ids["project_profiles"]
+                cmd = [
+                    sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
+                    "list-records", file_id, str(project_sheet_id), "--page-size", "100"
+                ]
+                resp = subprocess.check_output(cmd, timeout=10).decode("utf-8")
+                project_exists = project in resp
+                if not project_exists:
+                    project_data = [{
+                        "项目名称": project,
+                        "项目状态": "进行中",
+                        "关联客户": customer,
+                        "开始时间": today_str(),
+                    }]
+                    create_cmd = [
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
+                        "create-records", file_id, str(project_sheet_id),
+                        "--json", json.dumps(project_data, ensure_ascii=False)
+                    ]
+                    subprocess.check_output(create_cmd, timeout=10)
+                    results.append(f"✅ 项目档案：已新建（{project}，关联客户：{customer}）")
+            except Exception:
+                pass
+
     elif work_type == "团队事务":
         topic = extracted.get("task_name") or content[:50]
         event_type = extracted.get("event_type")
         participants = extracted.get("participants")
+        customer = extracted.get("customer") or ""
+        project = extracted.get("project") or ""
 
         rec = tables.create_team_record(
             topic=topic,
@@ -312,6 +333,44 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
         )
         if rec:
             results.append(f"✅ 团队事务记录表：已创建「{topic}」")
+
+        # 联动更新：客户档案
+        if customer:
+            try:
+                tables.update_customer_last_followup(customer)
+                results.append(f"✅ 客户档案：已更新最近跟进时间，跟进次数+1（{customer}）")
+            except Exception:
+                pass
+
+        # 联动更新：项目档案
+        if project:
+            try:
+                import subprocess, json
+                wps_skill_path = str(get_wps365_root())
+                file_id = tables.file_id
+                project_sheet_id = tables.sheet_ids["project_profiles"]
+                cmd = [
+                    sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
+                    "list-records", file_id, str(project_sheet_id), "--page-size", "100"
+                ]
+                resp = subprocess.check_output(cmd, timeout=10).decode("utf-8")
+                project_exists = project in resp
+                if not project_exists:
+                    project_data = [{
+                        "项目名称": project,
+                        "项目状态": "进行中",
+                        "关联客户": customer,
+                        "开始时间": today_str(),
+                    }]
+                    create_cmd = [
+                        sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
+                        "create-records", file_id, str(project_sheet_id),
+                        "--json", json.dumps(project_data, ensure_ascii=False)
+                    ]
+                    subprocess.check_output(create_cmd, timeout=10)
+                    results.append(f"✅ 项目档案：已新建（{project}，关联客户：{customer}）")
+            except Exception:
+                pass
 
     elif work_type == "灵感记录":
         category = extracted.get("idea_category")
@@ -326,6 +385,33 @@ def dispatch_to_business_table(tables: KingWorkTables, work_type: str, content: 
         if rec:
             results.append(f"✅ 灵感记录表：已创建")
 
+    elif work_type == "活动接待":
+        subject = extracted.get("task_name") or extracted.get("event_subject") or content[:50]
+        event_type = extracted.get("event_type")
+        reception_target = extracted.get("reception_target") or ""
+        customer = extracted.get("customer") or ""
+        project = extracted.get("project") or ""
+
+        rec = tables.create_event_reception(
+            subject=subject,
+            content=extracted.get("content_optimized") or content,
+            event_type=event_type,
+            reception_target=reception_target,
+            customer=customer,
+            project=project,
+            diary_id=diary_id,
+        )
+        if rec:
+            results.append(f"✅ 活动接待记录表：已创建「{subject}」（接待对象：{reception_target}）")
+
+        # 联动更新：客户档案
+        if customer:
+            try:
+                tables.update_customer_last_followup(customer)
+                results.append(f"✅ 客户档案：已更新最近跟进时间，跟进次数+1（{customer}）")
+            except Exception:
+                pass
+
     return results
 
 
@@ -334,7 +420,7 @@ def main():
     from kingwork_client.base import debug_log
     debug_log("当前执行技能：kingrecord（工作记录）")
     args = parse_args()
-    wps_skill_path = "/root/.openclaw/skills/wps365-skill"
+    wps_skill_path = str(get_wps365_root())
     file_id = os.environ.get("KINGWORK_FILE_ID", "")
     
     # 处理列出最近记录
@@ -344,7 +430,7 @@ def main():
             sys.exit(1)
         print(f"## 最近 {args.list_recent} 条记录：")
         cmd = [
-            "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+            sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
             "list-records", file_id, "2", "--page-size", str(args.list_recent)
         ]
         try:
@@ -374,7 +460,7 @@ def main():
         # 先删除旧记录
         try:
             cmd = [
-                "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                 "delete-records", file_id, "2", record_id
             ]
             subprocess.check_output(cmd, timeout=10)
@@ -443,13 +529,13 @@ def main():
     existing_projects = []
     import subprocess
     import json
-    wps_skill_path = "/root/.openclaw/skills/wps365-skill"
+    wps_skill_path = str(get_wps365_root())
     file_id = os.environ.get("KINGWORK_FILE_ID", "")
     if file_id:
         try:
             # 读取客户列表
             cmd = [
-                "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                 "list-records", file_id, "4", "--page-size", "200"
             ]
             resp = subprocess.check_output(cmd, timeout=10).decode("utf-8")
@@ -459,7 +545,7 @@ def main():
             
             # 读取项目列表
             cmd = [
-                "python", f"{wps_skill_path}/skills/dbsheet/run.py",
+                sys.executable, str(Path(wps_skill_path) / "skills" / "dbsheet" / "run.py"),
                 "list-records", file_id, "5", "--page-size", "200"
             ]
             resp = subprocess.check_output(cmd, timeout=10).decode("utf-8")
@@ -468,41 +554,74 @@ def main():
         except Exception as e:
             pass
 
-    # 无论是否指定工作类型，都先调用大模型做结构化分析提取字段（最多重试2次）
+    # ============================================================
+    # 两步式 LLM 调用：Step1 分类 → Step2 信息提取
+    # ============================================================
     import time
-    result = None
+    confidence = 0.7
+    extracted = {}
+
+    # --- Step1: 轻量分类（仅在未手动指定类型时执行）---
+    if not work_type:
+        classify_result = None
+        for attempt in range(3):
+            try:
+                classify_result = llm.classify_work_type(content)
+                if classify_result and classify_result.get("work_type"):
+                    break
+                if attempt < 2:
+                    print(f"  ⚠️ 分类LLM返回异常（第{attempt+1}次），3秒后重试...")
+                    time.sleep(3)
+            except Exception as e:
+                if attempt < 2:
+                    print(f"  ⚠️ 分类LLM调用异常：{e}（第{attempt+1}次），3秒后重试...")
+                    time.sleep(3)
+                else:
+                    print(f"  ❌ 分类LLM最终失败：{e}，降级到关键词分类")
+
+        if classify_result and classify_result.get("work_type"):
+            work_type = classify_result["work_type"]
+            confidence = classify_result.get("confidence", 0.8)
+            if args.verbose:
+                reason = classify_result.get("reason", "")
+                print(f"  📋 Step1 分类结果：{work_type}（置信度{confidence:.0%}，{reason}）")
+        else:
+            # 降级到关键词分类
+            work_type = _keyword_classify(content)
+            confidence = 0.5
+            if args.verbose:
+                print(f"  📋 Step1 降级到关键词分类：{work_type}")
+
+    # --- Step2: 按类型定向信息提取 ---
+    extract_result = None
     for attempt in range(3):
         try:
-            result = llm.classify_work(content, existing_customers, existing_projects)
-            if result is not None:
+            extract_result = llm.extract_work_info(content, work_type, existing_customers, existing_projects)
+            if extract_result is not None:
                 break
             if attempt < 2:
-                print(f"  ⚠️ LLM返回None（第{attempt+1}次），3秒后重试...")
+                print(f"  ⚠️ 提取LLM返回None（第{attempt+1}次），3秒后重试...")
                 time.sleep(3)
         except Exception as e:
             if attempt < 2:
-                print(f"  ⚠️ LLM调用异常：{e}（第{attempt+1}次），3秒后重试...")
+                print(f"  ⚠️ 提取LLM调用异常：{e}（第{attempt+1}次），3秒后重试...")
                 time.sleep(3)
             else:
-                print(f"  ❌ LLM调用最终失败：{e}，降级到规则提取")
+                print(f"  ❌ 提取LLM最终失败：{e}，降级到规则提取")
 
     try:
-        if result and result.get("extracted_info"):
-            extracted = result.get("extracted_info", {})
-            confidence = result.get("confidence", 0.9)
-            # LLM客户名二次验证：如果提取到客户名，与已有客户列表做语义匹配
+        if extract_result and isinstance(extract_result, dict):
+            extracted = extract_result
+            # LLM客户名二次验证
             llm_customer = extracted.get("customer") or ""
             validated_customer = validate_customer_name(llm_customer, existing_customers, content)
             extracted["customer"] = validated_customer
-            # 如果没有手动指定工作类型，用大模型返回的类型
-            if not work_type and result.get("work_type"):
-                work_type = result["work_type"]
         else:
-            raise ValueError("LLM返回格式异常")
+            raise ValueError("提取LLM返回格式异常")
     except Exception as e:
         # LLM调用失败时，降级到规则提取
         extracted = {}
-        confidence = 0.7
+        confidence = min(confidence, 0.5)
         
         # 规则提取关键信息
         import re
@@ -729,8 +848,6 @@ def main():
             if extracted.get("priority"):
                 print(f"   ⚠️  优先级：{extracted['priority']}")
         print(f"   📅 记录时间：{today_str()}")
-        print(f"   🔗 查看多维表：<https://www.kdocs.cn/l/cbMwPNjcGRwD>")
-        
         # 记录本次ID，方便后续更新
         if diary_id:
             print(f"   🆔 记录ID：{diary_id}（如需修改请使用该ID）")
@@ -764,7 +881,7 @@ def _keyword_classify(text: str) -> str:
     for kw, wt in KEYWORD_MAP.items():
         if kw in text:
             return wt
-    return "客户跟进"
+    return _DEFAULT_TYPE
 
 
 if __name__ == "__main__":

@@ -4,18 +4,24 @@
 kingteam - 团队数据同步
 将个人 KingWork 数据同步至团队：客户跟进记录 + 日报/周报
 """
+from __future__ import annotations
 import sys
 import os
 import json
+import hashlib
 import argparse
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 BROWSE_DIR = Path(__file__).resolve().parent
-KINGWORK_ROOT = BROWSE_DIR.parent.parent  # /root/.openclaw/skills/kingwork
+KINGWORK_ROOT = BROWSE_DIR.parent.parent
 sys.path.insert(0, str(KINGWORK_ROOT))           # kingwork_client 在这里
-sys.path.insert(0, "/root/.openclaw/skills/wps365-skill")
+
+from kingwork_client.base import get_wps365_root as _get_wps365_root
+_wps365_root = str(_get_wps365_root())
+if _wps365_root not in sys.path:
+    sys.path.insert(0, _wps365_root)
 os.chdir(KINGWORK_ROOT)
 
 import yaml
@@ -23,6 +29,27 @@ import requests
 from kingwork_client.llm import LLMClient
 
 TZ_CST = timezone(timedelta(hours=8))
+
+# ─── 获取当前用户名 ──────────────────────────────────────────
+
+_cached_user_name = None
+
+def get_user_name() -> str:
+    """通过 WPS API 获取当前用户姓名，带缓存。"""
+    global _cached_user_name
+    if _cached_user_name:
+        return _cached_user_name
+    try:
+        from wpsv7client import get_current_user
+        resp = get_current_user()
+        data = resp.get("data", {})
+        name = data.get("user_name") or data.get("nick_name") or ""
+        if name:
+            _cached_user_name = name
+            return name
+    except Exception:
+        pass
+    return ""
 
 # ─── 配置加载 ─────────────────────────────────────────────────
 
@@ -36,7 +63,7 @@ def load_config() -> dict:
     if kingwork_cfg_path.exists():
         with open(kingwork_cfg_path, encoding="utf-8") as f:
             kw = yaml.safe_load(f)
-            for key in ["team", "personal"]:
+            for key in ["team", "personal", "sync"]:
                 if key in kw:
                     if key not in cfg:
                         cfg[key] = {}
@@ -52,12 +79,15 @@ def today_iso() -> str:
 # ─── WPS API 辅助 ──────────────────────────────────────────────
 
 def wps_headers() -> dict:
-    sid = os.environ.get("WPS_SID", "")
-    return {"cookie": f"wps_sid={sid}", "Content-Type": "application/json"}
+    sid = os.environ.get("wps_sid") or os.environ.get("WPS_SID") or ""
+    return {"cookie": f"wps_sid={sid}; csrf={sid}", "Content-Type": "application/json"}
 
-def list_records(file_id: str, sheet_id: str, page_size: int = 100) -> list:
+def list_records(file_id: str, sheet_id: str, page_size: int = 100, filter_body: dict = None) -> list:
     url = f"https://api.wps.cn/v7/dbsheet/{file_id}/sheets/{sheet_id}/records"
-    resp = requests.post(url, headers=wps_headers(), json={"page_size": page_size}, timeout=15)
+    body = {"page_size": page_size}
+    if filter_body:
+        body["filter"] = filter_body
+    resp = requests.post(url, headers=wps_headers(), json=body, timeout=15)
     data = resp.json()
     if resp.status_code != 200 or data.get("code") != 0:
         return []
@@ -89,12 +119,12 @@ def get_sheet_schema(file_id: str, sheet_id: str) -> dict:
     try:
         cmd = [
             sys.executable,
-            "/root/.openclaw/skills/wps365-skill/skills/dbsheet/run.py",
+            str(Path(_wps365_root) / "skills" / "dbsheet" / "run.py"),
             "schema",
             file_id,
             "--sheet-id", str(sheet_id),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20, cwd="/root/.openclaw/skills/wps365-skill")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20, cwd=_wps365_root)
         output = result.stdout
         # 提取 JSON 部分
         import re
@@ -283,20 +313,23 @@ def sync_customers(start_date: str, end_date: str, cfg: dict) -> dict:
         work_type_options = ["客户交流（线上）", "客户交流（线下）", "方案编写", "POC 支持", "培训学习", "其他"]
 
     # 2. 读取个人日记记录
+    # 注：WPS Date 字段不支持服务端 filter（GreaterThan/LessThan 返回 Unknown enum），
+    #     因此全量拉取 + 客户端日期过滤
     records = list_records(personal_file_id, "2", page_size=100)
 
     # 3. 筛选日期范围内 + 工作类型在配置的可同步类型列表中
     sync_types = cfg.get("sync", {}).get("sync_types", ["客户跟进"])
 
-    # 先查团队已有记录（按填写日期去重）
+    # 先查团队已有记录（客户端按日期范围过滤，再用内容哈希去重）
     team_records = list_records(team_file_id, team_sheet_id, page_size=100)
-    existing_dates = set()
+    existing_hashes = set()
     for r in team_records:
-        date_val = r.get("填写日期", "")
-        if date_val:
-            existing_dates.add(str(date_val)[:10].replace("/", "-"))
+        team_date = str(r.get("填写日期", ""))[:10].replace("/", "-")
+        if start_date <= team_date <= end_date:
+            content = f"{r.get('工作内容', '')}|{r.get('工作类型', '')}"
+            existing_hashes.add(hashlib.md5(content.encode()).hexdigest())
 
-    # 筛选个人记录（按配置的可同步类型过滤）
+    # 筛选个人记录（按配置的可同步类型过滤 + 客户端日期过滤）
     matched = []
     for r in records:
         rec_date = str(r.get(field_mapping.get("记录时间", "记录时间"), ""))[:10].replace("/", "-")
@@ -314,17 +347,19 @@ def sync_customers(start_date: str, end_date: str, cfg: dict) -> dict:
 
     for rec in matched:
         rec_date = str(rec.get(field_mapping.get("记录时间", "记录时间"), ""))[:10].replace("/", "-")
-        # 冲突处理
-        if rec_date in existing_dates and conflict_strategy == "skip":
-            skipped += 1
-            results.append({"id": rec.get("id"), "date": rec_date, "status": "skipped"})
-            continue
 
-        # LLM 智能映射
+        # LLM 智能映射（先映射得到工作内容，再做内容哈希去重）
         mapped = map_record_via_llm(rec, work_type_options, field_mapping, cfg.get("team", {}).get("work_type_mapping", {}))
         if not mapped or not mapped.get("工作内容"):
             failed += 1
             results.append({"id": rec.get("id"), "date": rec_date, "status": "failed"})
+            continue
+
+        # 按内容哈希去重（skip 模式：已存在则跳过；overwrite 模式：也走同样逻辑，不再重复创建）
+        content_hash = hashlib.md5(f"{mapped.get('工作内容', '')}|{mapped.get('工作类型', '')}".encode()).hexdigest()
+        if content_hash in existing_hashes and conflict_strategy == "skip":
+            skipped += 1
+            results.append({"id": rec.get("id"), "date": rec_date, "status": "skipped"})
             continue
 
         # 写入团队（只写入团队表存在的字段）
@@ -346,8 +381,6 @@ def sync_customers(start_date: str, end_date: str, cfg: dict) -> dict:
         else:
             failed += 1
             results.append({"id": rec.get("id"), "date": rec_date, "status": "failed", "error": resp.get("msg")})
-
-        existing_dates.add(rec_date)
 
     return {
         "synced": synced,
@@ -407,7 +440,8 @@ def sync_daily(cfg: dict) -> dict:
     if not folder_id:
         return {"success": False, "message": f"未找到日报文件夹「{folder_name}」，请检查配置"}
 
-    filename = f"日报_{date_str}.md"
+    user_name = get_user_name()
+    filename = f"{user_name}_日报_{date_str}.md" if user_name else f"日报_{date_str}.md"
     resp = upload_doc_to_folder(
         drive_id,
         folder_id,
@@ -435,7 +469,8 @@ def sync_weekly(cfg: dict) -> dict:
     if not report_content:
         return {"success": False, "message": "报告生成失败"}
 
-    filename = f"周报_{week_range}.md"
+    user_name = get_user_name()
+    filename = f"{user_name}_周报_{week_range}.md" if user_name else f"周报_{week_range}.md"
     resp = upload_doc_to_folder(
         cfg["team"]["drive_id"],
         find_folder_id_by_name(cfg["team"]["drive_id"], cfg["team"].get("weekly_folder", "周报")),
