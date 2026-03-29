@@ -1,390 +1,567 @@
-# KingWork 数据表 Schema 定义
-# field_type 参考 WPS V7 多维表字段类型：
-#   SingleLineText, MultiLineText, Number, SingleSelect, MultiSelect,
-#   DateTime, Checkbox, Link, Attachment
-
 tables:
-  - key: diary_records
-    name: "01日记记录"
-    description: "主入口表，记录所有工作日记"
-    fields:
-      - name: "记录时间"
-        field_type: "Date"
-      - name: "内容"
-        field_type: "MultiLineText"
-      - name: "工作类型"
-        field_type: "SingleSelect"
-        options: ["客户跟进", "待办事项", "学习成长", "横向支持", "团队事务", "灵感记录", "方案编写", "问题服务", "其他"]
-      - name: "关联客户"
-        field_type: "SingleLineText"
-      - name: "关联项目"
-        field_type: "SingleLineText"
-      - name: "标签"
-        field_type: "MultiSelect"
-        options: ["重要", "紧急", "待跟进", "已完成", "惊喜"]
-      - name: "创建时间"
-        field_type: "Date"
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "备注"
-        field_type: "MultiLineText"
-    views:
-      - name: "全部日记"
-        view_type: "Grid"
-      - name: "今日日记"
-        view_type: "Grid"
-      - name: "本周日记"
-        view_type: "Grid"
-
-  - key: todo_records
-    name: "02待办记录"
-    description: "待办事项管理"
-    fields:
-      - name: "任务名称"
-        field_type: "SingleLineText"
-      - name: "任务描述"
-        field_type: "MultiLineText"
-      - name: "优先级"
-        field_type: "SingleSelect"
-        options: ["高", "中", "低"]
-      - name: "状态"
-        field_type: "SingleSelect"
-        options: ["待处理", "进行中", "已完成", "已取消"]
-      - name: "到期时间"
-        field_type: "Date"
-      - name: "关联客户"
-        field_type: "SingleLineText"
-      - name: "关联项目"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-      - name: "完成时间"
-        field_type: "Date"
-      - name: "备注"
-        field_type: "MultiLineText"
-    views:
-      - name: "全部待办"
-        view_type: "Grid"
-      - name: "待办任务"
-        view_type: "Grid"
-      - name: "今日到期"
-        view_type: "Grid"
-
-  - key: customer_profiles
-    name: "03客户档案"
-    description: "客户信息管理"
-    fields:
-      - name: "客户名称"
-        field_type: "SingleLineText"
-      - name: "客户类型"
-        field_type: "SingleSelect"
-        options: ["潜在客户", "意向客户", "正式客户", "战略客户", "沉睡客户"]
-      - name: "行业"
-        field_type: "SingleSelect"
-        options: ["金融", "制造", "零售", "医疗", "教育", "政府", "互联网", "其他"]
-      - name: "联系人"
-        field_type: "SingleLineText"
-      - name: "联系方式"
-        field_type: "SingleLineText"
-      - name: "客户状态"
-        field_type: "SingleSelect"
-        options: ["跟进中", "暂缓", "成交", "流失"]
-      - name: "最近跟进时间"
-        field_type: "Date"
-      - name: "跟进次数"
-        field_type: "Number"
-      - name: "创建时间"
-        field_type: "Date"
-      - name: "备注"
-        field_type: "MultiLineText"
-    views:
-      - name: "全部客户"
-        view_type: "Grid"
-      - name: "活跃客户"
-        view_type: "Grid"
-
-  - key: project_profiles
-    name: "04项目档案"
-    description: "项目信息管理"
-    fields:
-      - name: "项目名称"
-        field_type: "SingleLineText"
-      - name: "项目状态"
-        field_type: "SingleSelect"
-        options: ["售前", "立项", "进行中", "已完成", "暂停", "取消"]
-      - name: "项目类型"
-        field_type: "SingleSelect"
-        options: ["新项目", "续约", "增值", "试点"]
-      - name: "关联客户"
-        field_type: "SingleLineText"
-      - name: "开始时间"
-        field_type: "Date"
-      - name: "预计结束时间"
-        field_type: "Date"
-      - name: "实际结束时间"
-        field_type: "Date"
-      - name: "项目优先级"
-        field_type: "SingleSelect"
-        options: ["高", "中", "低"]
-      - name: "创建时间"
-        field_type: "Date"
-      - name: "备注"
-        field_type: "MultiLineText"
-    views:
-      - name: "全部项目"
-        view_type: "Grid"
-      - name: "进行中项目"
-        view_type: "Grid"
-
-  - key: customer_followups
-    name: "05客户跟进记录"
-    description: "客户跟进历史"
-    fields:
-      - name: "跟进时间"
-        field_type: "Date"
-      - name: "客户名称"
-        field_type: "SingleLineText"
-      - name: "跟进方式"
-        field_type: "SingleSelect"
-        options: ["电话", "微信", "邮件", "上门", "会议", "其他"]
-      - name: "跟进内容"
-        field_type: "MultiLineText"
-      - name: "跟进结果"
-        field_type: "SingleSelect"
-        options: ["有兴趣", "需求明确", "待决策", "无需求", "已成交"]
-      - name: "下次跟进时间"
-        field_type: "Date"
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "关联日记ID"
-        field_type: "SingleLineText"
-      - name: "会议链接"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部跟进记录"
-        view_type: "Grid"
-      - name: "待下次跟进"
-        view_type: "Grid"
-
-  - key: learning_records
-    name: "06学习成长记录"
-    description: "学习培训记录"
-    fields:
-      - name: "学习时间"
-        field_type: "Date"
-      - name: "学习主题"
-        field_type: "SingleLineText"
-      - name: "学习类型"
-        field_type: "SingleSelect"
-        options: ["产品培训", "技术学习", "行业研究", "销售技巧", "其他"]
-      - name: "学习内容"
-        field_type: "MultiLineText"
-      - name: "学习时长"
-        field_type: "Number"
-      - name: "学习资源"
-        field_type: "SingleLineText"
-      - name: "关键收获"
-        field_type: "MultiLineText"
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "关联日记ID"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部学习记录"
-        view_type: "Grid"
-
-  - key: support_records
-    name: "07横向支持记录"
-    description: "跨部门协作记录"
-    fields:
-      - name: "支持时间"
-        field_type: "Date"
-      - name: "支持对象"
-        field_type: "SingleLineText"
-      - name: "支持类型"
-        field_type: "SingleSelect"
-        options: ["技术支持", "方案支持", "演示支持", "培训支持", "其他"]
-      - name: "支持内容"
-        field_type: "MultiLineText"
-      - name: "支持结果"
-        field_type: "SingleSelect"
-        options: ["已解决", "进行中", "待跟进"]
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "关联日记ID"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部支持记录"
-        view_type: "Grid"
-
-  - key: team_records
-    name: "08团队事务记录"
-    description: "团队内部事务"
-    fields:
-      - name: "事务时间"
-        field_type: "Date"
-      - name: "事务类型"
-        field_type: "SingleSelect"
-        options: ["例会", "项目会议", "培训", "团建", "分享", "其他"]
-      - name: "事务主题"
-        field_type: "SingleLineText"
-      - name: "事务内容"
-        field_type: "MultiLineText"
-      - name: "参与人员"
-        field_type: "SingleLineText"
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "关联日记ID"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部团队事务"
-        view_type: "Grid"
-
-  - key: idea_records
-    name: "09灵感记录"
-    description: "灵感创意收集"
-    fields:
-      - name: "记录时间"
-        field_type: "Date"
-      - name: "灵感内容"
-        field_type: "MultiLineText"
-      - name: "灵感类别"
-        field_type: "SingleSelect"
-        options: ["产品创意", "销售策略", "流程优化", "技术方案", "其他"]
-      - name: "可行性"
-        field_type: "SingleSelect"
-        options: ["高", "中", "低", "待评估"]
-      - name: "实施状态"
-        field_type: "SingleSelect"
-        options: ["待评估", "计划中", "实施中", "已实施", "搁置"]
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "关联日记ID"
-        field_type: "SingleLineText"
-      - name: "URL链接地址"
-        field_type: "SingleLineText"
-      - name: "WPS文档地址"
-        field_type: "SingleLineText"
-      - name: "标签"
-        field_type: "MultiSelect"
-        options: ["产品创意", "销售策略", "流程优化", "技术方案", "AI应用", "客户需求", "行业洞察", "竞品信息", "合作机会"]
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部灵感"
-        view_type: "Grid"
-
-  - key: surprise_docs
-    name: "10惊喜文档记录"
-    description: "有价值文档收藏"
-    fields:
-      - name: "发现时间"
-        field_type: "Date"
-      - name: "文档名称"
-        field_type: "SingleLineText"
-      - name: "文档链接"
-        field_type: "SingleLineText"
-      - name: "文档类型"
-        field_type: "SingleSelect"
-        options: ["otl", "md", "docx", "pdf", "pptx", "dps", "xlsx", "et", "dt", "txt", "其他"]
-      - name: "关注次数"
-        field_type: "Number"
-        defaultValue: 1
-      - name: "惊喜原因"
-        field_type: "MultiLineText"
-      - name: "相关客户"
-        field_type: "SingleLineText"
-      - name: "相关项目"
-        field_type: "SingleLineText"
-      - name: "标签"
-        field_type: "MultiSelect"
-        options: ["可复用", "参考价值", "竞品分析", "行业洞察"]
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "关联日记ID"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部惊喜文档"
-        view_type: "Grid"
-
-  - key: surprise_communications
-    name: "11惊喜沟通记录"
-    description: "有价值沟通收藏"
-    fields:
-      - name: "沟通时间"
-        field_type: "Date"
-      - name: "沟通对象"
-        field_type: "SingleLineText"
-      - name: "沟通方式"
-        field_type: "SingleSelect"
-        options: ["会议", "微信", "电话", "邮件", "其他"]
-      - name: "惊喜内容"
-        field_type: "MultiLineText"
-      - name: "价值点"
-        field_type: "MultiLineText"
-      - name: "相关客户"
-        field_type: "SingleLineText"
-      - name: "相关项目"
-        field_type: "SingleLineText"
-      - name: "标签"
-        field_type: "MultiSelect"
-        options: ["竞品信息", "客户需求", "行业洞察", "合作机会"]
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "关联日记ID"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部惊喜沟通"
-        view_type: "Grid"
-
-  - key: surprise_meetings
-    name: "12惊喜会议记录"
-    description: "有价值的会议记录收藏"
-    fields:
-      - name: "发现时间"
-        field_type: "Date"
-      - name: "会议名称"
-        field_type: "SingleLineText"
-      - name: "参会人清单"
-        field_type: "MultiLineText"
-      - name: "会议链接"
-        field_type: "SingleLineText"
-      - name: "会议摘要"
-        field_type: "MultiLineText"
-      - name: "相关客户"
-        field_type: "SingleLineText"
-      - name: "相关项目"
-        field_type: "SingleLineText"
-      - name: "标签"
-        field_type: "MultiSelect"
-        options: ["客户需求", "方案讨论", "决策制定", "项目推进", "培训学习", "行业洞察"]
-      - name: "来源"
-        field_type: "SingleSelect"
-        options: ["手动输入", "AI自动分析"]
-      - name: "会议ID"
-        field_type: "SingleLineText"
-      - name: "创建时间"
-        field_type: "Date"
-    views:
-      - name: "全部惊喜会议"
-        view_type: "Grid"
+- key: diary_records
+  name: 01日记记录
+  description: 主入口表，记录所有工作日记
+  fields:
+  - name: 记录时间
+    field_type: Date
+  - name: 内容
+    field_type: MultiLineText
+  - name: 工作类型
+    field_type: SingleSelect
+    options:
+    - 客户跟进
+    - 待办事项
+    - 学习成长
+    - 横向支持
+    - 团队事务
+    - 灵感记录
+    - 方案编写
+    - 问题服务
+    - 活动接待
+    - 其他
+  - name: 关联客户
+    field_type: SingleLineText
+  - name: 关联项目
+    field_type: SingleLineText
+  - name: 标签
+    field_type: MultiSelect
+    options:
+    - 重要
+    - 紧急
+    - 待跟进
+    - 已完成
+    - 惊喜
+  - name: 创建时间
+    field_type: Date
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 备注
+    field_type: MultiLineText
+  views:
+  - name: 全部日记
+    view_type: Grid
+  - name: 今日日记
+    view_type: Grid
+  - name: 本周日记
+    view_type: Grid
+- key: todo_records
+  name: 02待办记录
+  description: 待办事项管理
+  fields:
+  - name: 任务名称
+    field_type: SingleLineText
+  - name: 任务描述
+    field_type: MultiLineText
+  - name: 优先级
+    field_type: SingleSelect
+    options:
+    - 高
+    - 中
+    - 低
+  - name: 状态
+    field_type: SingleSelect
+    options:
+    - 待处理
+    - 进行中
+    - 已完成
+    - 已取消
+  - name: 到期时间
+    field_type: Date
+  - name: 关联客户
+    field_type: SingleLineText
+  - name: 关联项目
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  - name: 完成时间
+    field_type: Date
+  - name: 备注
+    field_type: MultiLineText
+  views:
+  - name: 全部待办
+    view_type: Grid
+  - name: 待办任务
+    view_type: Grid
+  - name: 今日到期
+    view_type: Grid
+- key: customer_profiles
+  name: 03客户档案
+  description: 客户信息管理
+  fields:
+  - name: 客户名称
+    field_type: SingleLineText
+  - name: 客户类型
+    field_type: SingleSelect
+    options:
+    - 潜在客户
+    - 意向客户
+    - 正式客户
+    - 战略客户
+    - 沉睡客户
+  - name: 行业
+    field_type: SingleSelect
+    options:
+    - 金融
+    - 制造
+    - 零售
+    - 医疗
+    - 教育
+    - 政府
+    - 互联网
+    - 其他
+  - name: 联系人
+    field_type: SingleLineText
+  - name: 联系方式
+    field_type: SingleLineText
+  - name: 客户状态
+    field_type: SingleSelect
+    options:
+    - 跟进中
+    - 暂缓
+    - 成交
+    - 流失
+  - name: 最近跟进时间
+    field_type: Date
+  - name: 跟进次数
+    field_type: Number
+  - name: 创建时间
+    field_type: Date
+  - name: 备注
+    field_type: MultiLineText
+  views:
+  - name: 全部客户
+    view_type: Grid
+  - name: 活跃客户
+    view_type: Grid
+- key: project_profiles
+  name: 04项目档案
+  description: 项目信息管理
+  fields:
+  - name: 项目名称
+    field_type: SingleLineText
+  - name: 项目状态
+    field_type: SingleSelect
+    options:
+    - 售前
+    - 立项
+    - 进行中
+    - 已完成
+    - 暂停
+    - 取消
+  - name: 项目类型
+    field_type: SingleSelect
+    options:
+    - 新项目
+    - 续约
+    - 增值
+    - 试点
+  - name: 关联客户
+    field_type: SingleLineText
+  - name: 开始时间
+    field_type: Date
+  - name: 预计结束时间
+    field_type: Date
+  - name: 实际结束时间
+    field_type: Date
+  - name: 项目优先级
+    field_type: SingleSelect
+    options:
+    - 高
+    - 中
+    - 低
+  - name: 创建时间
+    field_type: Date
+  - name: 备注
+    field_type: MultiLineText
+  views:
+  - name: 全部项目
+    view_type: Grid
+  - name: 进行中项目
+    view_type: Grid
+- key: customer_followups
+  name: 05客户跟进记录
+  description: 客户跟进历史
+  fields:
+  - name: 跟进时间
+    field_type: Date
+  - name: 客户名称
+    field_type: SingleLineText
+  - name: 跟进方式
+    field_type: SingleSelect
+    options:
+    - 电话
+    - 微信
+    - 邮件
+    - 上门
+    - 会议
+    - 其他
+  - name: 跟进内容
+    field_type: MultiLineText
+  - name: 跟进结果
+    field_type: SingleSelect
+    options:
+    - 有兴趣
+    - 需求明确
+    - 待决策
+    - 无需求
+    - 已成交
+  - name: 下次跟进时间
+    field_type: Date
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: 会议链接
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部跟进记录
+    view_type: Grid
+  - name: 待下次跟进
+    view_type: Grid
+- key: learning_records
+  name: 06学习成长记录
+  description: 学习培训记录
+  fields:
+  - name: 学习时间
+    field_type: Date
+  - name: 学习主题
+    field_type: SingleLineText
+  - name: 学习类型
+    field_type: SingleSelect
+    options:
+    - 产品培训
+    - 技术学习
+    - 行业研究
+    - 销售技巧
+    - 其他
+  - name: 学习内容
+    field_type: MultiLineText
+  - name: 学习时长
+    field_type: Number
+  - name: 学习资源
+    field_type: SingleLineText
+  - name: 关键收获
+    field_type: MultiLineText
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部学习记录
+    view_type: Grid
+- key: support_records
+  name: 07横向支持记录
+  description: 跨部门协作记录
+  fields:
+  - name: 支持时间
+    field_type: Date
+  - name: 支持对象
+    field_type: SingleLineText
+  - name: 支持类型
+    field_type: SingleSelect
+    options:
+    - 技术支持
+    - 方案支持
+    - 演示支持
+    - 培训支持
+    - 其他
+  - name: 支持内容
+    field_type: MultiLineText
+  - name: 支持结果
+    field_type: SingleSelect
+    options:
+    - 已解决
+    - 进行中
+    - 待跟进
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部支持记录
+    view_type: Grid
+- key: team_records
+  name: 08团队事务记录
+  description: 团队内部事务
+  fields:
+  - name: 事务时间
+    field_type: Date
+  - name: 事务类型
+    field_type: SingleSelect
+    options:
+    - 例会
+    - 项目会议
+    - 培训
+    - 团建
+    - 分享
+    - 其他
+  - name: 事务主题
+    field_type: SingleLineText
+  - name: 事务内容
+    field_type: MultiLineText
+  - name: 参与人员
+    field_type: SingleLineText
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部团队事务
+    view_type: Grid
+- key: idea_records
+  name: 09灵感记录
+  description: 灵感创意收集
+  fields:
+  - name: 记录时间
+    field_type: Date
+  - name: 灵感内容
+    field_type: MultiLineText
+  - name: 灵感类别
+    field_type: SingleSelect
+    options:
+    - 产品创意
+    - 销售策略
+    - 流程优化
+    - 技术方案
+    - 其他
+  - name: 可行性
+    field_type: SingleSelect
+    options:
+    - 高
+    - 中
+    - 低
+    - 待评估
+  - name: 实施状态
+    field_type: SingleSelect
+    options:
+    - 待评估
+    - 计划中
+    - 实施中
+    - 已实施
+    - 搁置
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: URL链接地址
+    field_type: SingleLineText
+  - name: WPS文档地址
+    field_type: SingleLineText
+  - name: 标签
+    field_type: MultiSelect
+    options:
+    - 产品创意
+    - 销售策略
+    - 流程优化
+    - 技术方案
+    - AI应用
+    - 客户需求
+    - 行业洞察
+    - 竞品信息
+    - 合作机会
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部灵感
+    view_type: Grid
+- key: surprise_docs
+  name: 20惊喜文档记录
+  description: 有价值文档收藏
+  fields:
+  - name: 发现时间
+    field_type: Date
+  - name: 文档名称
+    field_type: SingleLineText
+  - name: 文档链接
+    field_type: SingleLineText
+  - name: 文档类型
+    field_type: SingleSelect
+    options:
+    - otl
+    - md
+    - docx
+    - pdf
+    - pptx
+    - dps
+    - xlsx
+    - et
+    - dt
+    - txt
+    - 其他
+  - name: 关注次数
+    field_type: Number
+    defaultValue: 1
+  - name: 惊喜原因
+    field_type: MultiLineText
+  - name: 相关客户
+    field_type: SingleLineText
+  - name: 相关项目
+    field_type: SingleLineText
+  - name: 标签
+    field_type: MultiSelect
+    options:
+    - 可复用
+    - 参考价值
+    - 竞品分析
+    - 行业洞察
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部惊喜文档
+    view_type: Grid
+- key: surprise_communications
+  name: 21惊喜沟通记录
+  description: 有价值沟通收藏
+  fields:
+  - name: 沟通时间
+    field_type: Date
+  - name: 沟通对象
+    field_type: SingleLineText
+  - name: 沟通方式
+    field_type: SingleSelect
+    options:
+    - 会议
+    - 微信
+    - 电话
+    - 邮件
+    - 其他
+  - name: 惊喜内容
+    field_type: MultiLineText
+  - name: 价值点
+    field_type: MultiLineText
+  - name: 相关客户
+    field_type: SingleLineText
+  - name: 相关项目
+    field_type: SingleLineText
+  - name: 标签
+    field_type: MultiSelect
+    options:
+    - 竞品信息
+    - 客户需求
+    - 行业洞察
+    - 合作机会
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部惊喜沟通
+    view_type: Grid
+- key: surprise_meetings
+  name: 22惊喜会议记录
+  description: 有价值的会议记录收藏
+  fields:
+  - name: 发现时间
+    field_type: Date
+  - name: 会议名称
+    field_type: SingleLineText
+  - name: 参会人清单
+    field_type: MultiLineText
+  - name: 会议链接
+    field_type: SingleLineText
+  - name: 会议摘要
+    field_type: MultiLineText
+  - name: 相关客户
+    field_type: SingleLineText
+  - name: 相关项目
+    field_type: SingleLineText
+  - name: 标签
+    field_type: MultiSelect
+    options:
+    - 客户需求
+    - 方案讨论
+    - 决策制定
+    - 项目推进
+    - 培训学习
+    - 行业洞察
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 会议ID
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  views:
+  - name: 全部惊喜会议
+    view_type: Grid
+- key: event_reception
+  name: 10活动接待记录
+  description: 市场活动与接待来访记录
+  fields:
+  - name: 活动时间
+    field_type: Date
+  - name: 接待对象
+    field_type: SingleLineText
+  - name: 活动类型
+    field_type: SingleSelect
+    options:
+    - 市场活动
+    - 接待来访
+    - 展会
+    - 渠道宣讲
+    - 行业会议
+    - 客户参观
+    - 其他
+  - name: 主题
+    field_type: SingleLineText
+  - name: 内容
+    field_type: MultiLineText
+  - name: 关联客户
+    field_type: SingleLineText
+  - name: 关联项目
+    field_type: SingleLineText
+  - name: 来源
+    field_type: SingleSelect
+    options:
+    - 手动输入
+    - AI自动分析
+  - name: 关联日记ID
+    field_type: SingleLineText
+  - name: 创建时间
+    field_type: Date
+  - name: 备注
+    field_type: MultiLineText
+  views:
+  - name: 全部活动接待
+    view_type: Grid

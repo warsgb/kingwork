@@ -2,7 +2,132 @@
 # 变量用 {variable_name} 表示，运行时替换
 
 prompts:
-  # 工作日记分类与信息提取
+  # ============================================================
+  # Step1: 轻量分类（专注判断工作类型，few-shot 增强）
+  # ============================================================
+  work_type_classification: |
+    你是工作日记分类助手。请判断用户输入属于以下哪种工作类型，只做分类，不做信息提取。
+
+    ## 工作类型定义（10类）
+    1. 客户跟进：与客户相关的沟通、拜访、演示、报价、合同、需求对接
+    2. 待办事项：需要完成的任务、安排、计划、提醒
+    3. 学习成长：学习新知识、培训、阅读、考试、技能提升
+    4. 横向支持：协助同事、跨部门协作、帮别人解决问题
+    5. 团队事务：团队内部会议、例会、团建、分享、汇报
+    6. 灵感记录：想法、创意、改进建议、灵光一闪
+    7. 方案编写：撰写方案、文档、材料、架构设计
+    8. 问题服务：处理技术问题、排障、答疑、修复bug、调试、售后支持
+    9. 活动接待：市场活动、接待来访、展会、客户参观、行业会议、渠道宣讲
+    10. 其他：无法明确归入以上任何一类
+
+    ## 分类要点
+    - 「调试」「修复」「排查」「解决问题」「兼容性」→ 问题服务，不是学习成长
+    - 「学到了」「了解了」「读了」「看了教程」→ 学习成长，不是问题服务
+    - 「帮XX做了」「协助XX」→ 横向支持，不是问题服务
+    - 「写方案」「出文档」「画架构图」→ 方案编写
+    - 「开会」「周会」「例会」「讨论」→ 团队事务
+    - 「要做」「需要完成」「计划」「安排」→ 待办事项
+    - 如果同时涉及多个类型，选最核心的那个
+
+    ## 分类示例
+    输入: "和泰康集团张总电话沟通了WPS365私有云部署需求"
+    输出: {{"work_type": "客户跟进", "confidence": 0.95, "reason": "涉及客户沟通和需求对接"}}
+
+    输入: "修复了KingWork技能的跨平台兼容性问题"
+    输出: {{"work_type": "问题服务", "confidence": 0.95, "reason": "修复兼容性问题属于排障"}}
+
+    输入: "学习了Python的类型注解和asyncio用法"
+    输出: {{"work_type": "学习成长", "confidence": 0.95, "reason": "学习新的技术知识"}}
+
+    输入: "帮销售部的小王做了一个客户演示的PPT"
+    输出: {{"work_type": "横向支持", "confidence": 0.90, "reason": "协助其他部门同事"}}
+
+    输入: "下周要提交季度报告"
+    输出: {{"work_type": "待办事项", "confidence": 0.90, "reason": "未来需要完成的任务"}}
+
+    输入: "参加了部门周会，讨论了下季度OKR"
+    输出: {{"work_type": "团队事务", "confidence": 0.95, "reason": "团队内部会议"}}
+
+    输入: "写了信创环境适配方案的初稿"
+    输出: {{"work_type": "方案编写", "confidence": 0.95, "reason": "撰写技术方案文档"}}
+
+    输入: "突然想到可以用多维表做技能配置管理"
+    输出: {{"work_type": "灵感记录", "confidence": 0.85, "reason": "一个改进想法"}}
+
+    输入: "调试在comate中使用我自定义的kw技能"
+    输出: {{"work_type": "问题服务", "confidence": 0.90, "reason": "调试技能属于排障调试"}}
+
+    输入: "要完善在不同工具中使用技能时候的兼容适配性"
+    输出: {{"work_type": "待办事项", "confidence": 0.90, "reason": "描述的是需要完成的计划"}}
+
+    ## 请分类以下内容，严格只输出JSON：
+    用户内容：{user_input}
+
+  # ============================================================
+  # Step2: 按类型定向信息提取
+  # ============================================================
+  work_info_extraction: |
+    你是工作日记信息提取助手。该记录已被分类为【{work_type}】，请从内容中提取结构化信息。
+
+    已有客户列表（用于名称匹配）：{existing_customers}
+    已有项目列表（用于名称匹配）：{existing_projects}
+
+    ## 提取规则
+    - 客户名称：只提取内容中明确出现的，优先匹配已有客户列表，找不到则返回null
+    - 项目名称：只提取内容中明确出现的，优先匹配已有项目列表，找不到则返回null
+    - 绝对不能编造内容中不存在的客户名或项目名
+
+    ## 枚举字段取值范围（必须严格从以下范围选择）
+    - 沟通方式（communication_method）：电话 | 微信 | 邮件 | 上门 | 会议 | 其他
+    - 跟进结果（follow_result）：有兴趣 | 需求明确 | 待决策 | 无需求 | 已成交
+    - 标签（tags）：重要 | 紧急 | 待跟进 | 已完成 | 惊喜
+    - 优先级（priority）：高 | 中 | 低
+
+    ## 按类型提取字段
+    - 客户跟进：customer, contact, communication_method, follow_result, next_followup_time, project
+    - 待办事项：task_name, priority, due_date
+    - 学习成长：learning_topic, learning_type, key_takeaway, duration_hours
+    - 横向支持：support_target, support_type
+    - 团队事务：event_type, participants
+    - 灵感记录：idea_category, feasibility
+    - 活动接待：reception_target, event_type(市场活动|接待来访|展会|渠道宣讲|行业会议|客户参观|其他), event_subject
+    - 方案编写：project, customer（如有关联）
+    - 问题服务：project, customer（如有关联）
+    - 通用字段：tags, summary, content_optimized
+
+    ## 输出格式（严格只输出JSON）
+    {{
+      "customer": "客户名称或null",
+      "project": "项目名称或null",
+      "contact": "联系人或null",
+      "communication_method": "沟通方式或null",
+      "follow_result": "跟进结果或null",
+      "next_followup_time": "下次跟进时间或null",
+      "task_name": "任务名称或null",
+      "priority": "优先级或null",
+      "due_date": "到期时间或null",
+      "learning_topic": "学习主题或null",
+      "learning_type": "学习类型或null",
+      "key_takeaway": "关键收获或null",
+      "duration_hours": null,
+      "support_target": "支持对象或null",
+      "support_type": "支持类型或null",
+      "event_type": "事务类型或null",
+      "participants": "参与人员或null",
+      "idea_category": "灵感类别或null",
+      "feasibility": "可行性或null",
+      "reception_target": "接待对象或null",
+      "event_subject": "活动主题或null",
+      "tags": ["标签"],
+      "summary": "30-50字关键摘要",
+      "content_optimized": "基于原始内容轻度优化，纠错通顺即可，不扩展不美化，字数不超过原始的2倍"
+    }}
+
+    用户内容：{user_input}
+
+  # ============================================================
+  # 旧版一体化 prompt（保留兼容，不再主动使用）
+  # ============================================================
   work_classification: |
     你是一个工作日记智能分析助手。请分析用户的工作日记内容，完成以下任务：
 
@@ -28,6 +153,7 @@ prompts:
        - 如果是横向支持：提取支持对象、支持类型、支持结果
        - 如果是团队事务：提取事务类型、主题、参与人员
        - 如果是灵感记录：提取灵感类别、可行性评估
+       - 如果是活动接待：提取接待对象、活动类型、主题
        - 提取相关项目名称（如有）
 
     3. 枚举字段取值范围（必须严格从以下范围选择，禁止输出范围之外的值）：
